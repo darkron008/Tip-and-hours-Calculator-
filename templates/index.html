@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tip & Hours Calculator - Upload</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 2rem; }
+      .card { max-width: 700px; margin: auto; padding: 1.5rem; border: 1px solid #ddd; border-radius: 8px; }
+      label { display: block; margin-top: .75rem; }
+      input[type=text] { width: 100%; padding: .5rem; }
+      .controls { margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Tip & Hours Calculator</h1>
+      <p>Upload your Clover Excel report (14-day) and download the tip distribution summary.</p>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <ul>
+          {% for m in messages %}
+            <li style="color: red">{{ m }}</li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+
+      <form method="post" enctype="multipart/form-data">
+        <label>Excel file
+          <input type="file" name="file" accept=".xlsx,.xls" required />
+        </label>
+
+        <label>Shift date column
+          <input type="text" name="date_col" value="Shift Date" />
+        </label>
+
+        <label>Daily tips column
+          <input type="text" name="tips_col" value="Daily Tip Total" />
+        </label>
+
+        <label>Hours worked column
+          <input type="text" name="hours_col" value="Hours Worked" />
+        </label>
+
+        <label>Employee name column
+          <input type="text" name="name_col" value="Employee Name" />
+        </label>
+
+        <div class="controls">
+          <button type="submit">Process and Download Summary</button>
+        </div>
+      </form>
+    </div>
+  </body>
+</html>
