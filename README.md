@@ -6,8 +6,7 @@ Run locally (PowerShell):
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate
-pip install -r requirements.txt
+.venv\Scripts\python -m pip install -r requirements.txt
 python -m pytest -q
 ```
 
@@ -18,7 +17,7 @@ python app.py tip --amount 100 --percent 15
 python app.py pay --hours 40 --rate 15.50
 ```
 
-Web UI:
+## Web UI with Drag & Drop
 
 Run the Flask web UI locally and open http://127.0.0.1:5000 in your browser:
 
@@ -28,4 +27,55 @@ python -m venv .venv
 python web_app.py
 ```
 
-Upload your report, adjust column headers if needed, and download the generated Excel summary.
+**Features:**
+- Drag and drop your Excel file or click to browse
+- Customize column names on the form if your headers differ from defaults
+- Download the generated Excel summary automatically
+- In-memory Excel processing (no temp files left on disk)
+
+## Cloud Deployment
+
+This app is ready for cloud deployment on **Heroku**, **Render**, **Railway**, or any platform that supports Python/Gunicorn.
+
+### Deploy to Heroku
+
+1. Install the [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli)
+2. Clone and navigate to the repo
+3. Create a new Heroku app:
+   ```bash
+   heroku create your-app-name
+   ```
+4. Set a secure secret key:
+   ```bash
+   heroku config:set SECRET_KEY=$(openssl rand -hex 32)
+   ```
+5. Deploy:
+   ```bash
+   git push heroku main
+   ```
+6. Open the app:
+   ```bash
+   heroku open
+   ```
+
+### Deploy to Render
+
+1. Push code to GitHub
+2. Go to [Render](https://render.com) and create a new Web Service
+3. Connect your GitHub repo
+4. Set environment:
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `gunicorn wsgi:app`
+5. Add environment variable `SECRET_KEY` (any random string for development)
+6. Deploy
+
+### Deploy to Railway
+
+1. Push code to GitHub
+2. Go to [Railway](https://railway.app) and create a new project
+3. Connect your GitHub repo
+4. Railway auto-detects Python and `Procfile`
+5. Add environment variable `SECRET_KEY`
+6. Deploy
+
+Your app will be live at a public URL. Share it to allow anyone to upload and download tip summaries.

@@ -4,7 +4,7 @@ import os
 from calculator.tips import distribute_daily_tips_df
 
 app = Flask(__name__)
-app.secret_key = "dev-secret-for-local"
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-for-local-testing-only")
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -52,4 +52,7 @@ def index():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Use PORT environment variable for cloud servers; default to 5000 for local dev
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_ENV") == "development"
+    app.run(host="0.0.0.0", port=port, debug=debug)
