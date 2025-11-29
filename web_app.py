@@ -9,8 +9,13 @@ from calculator.clock import process_clock_csv
 logger = logging.getLogger(__name__)
 
 
-def _generate_pdf_report(export_df):
-    """Generate a PDF report from the export DataFrame using reportlab."""
+def _generate_pdf_report(export_df, tips_df=None):
+    """Generate a PDF report from the export DataFrame using reportlab.
+    
+    Args:
+        export_df: The final summary DataFrame with employee names, hours, and tips
+        tips_df: Optional tips/sales DataFrame to extract date range
+    """
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -37,7 +42,21 @@ def _generate_pdf_report(export_df):
     title = Paragraph("Tip & Hours Distribution Report", title_style)
     elements.append(title)
     
-    # Date
+    # Extract date range from tips_df if available
+    date_range_text = f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+    if tips_df is not None and 'Date' in tips_df.columns:
+        try:
+            import pandas as pd
+            # Handle both datetime and string dates
+            dates = pd.to_datetime(tips_df['Date'], errors='coerce').dropna()
+            if len(dates) > 0:
+                min_date = dates.min().strftime('%B %d, %Y')
+                max_date = dates.max().strftime('%B %d, %Y')
+                date_range_text = f"Period: {min_date} to {max_date}<br/>Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+        except Exception:
+            pass  # Fallback to just generation date
+    
+    # Date/Period info
     date_style = ParagraphStyle(
         'DateStyle',
         parent=styles['Normal'],
@@ -46,7 +65,7 @@ def _generate_pdf_report(export_df):
         spaceAfter=12,
         alignment=TA_CENTER
     )
-    date_para = Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", date_style)
+    date_para = Paragraph(date_range_text, date_style)
     elements.append(date_para)
     elements.append(Spacer(1, 0.2*inch))
     
@@ -269,8 +288,9 @@ def index():
                 clock_hours_col=clock_hours_col,
             )
 
-            # Generate PDF report
-            pdf_buffer = _generate_pdf_report(export_df)
+            # Generate PDF report (pass first tips df for date range if available)
+            tips_for_date_range = dfs[0] if dfs else None
+            pdf_buffer = _generate_pdf_report(export_df, tips_for_date_range)
 
             return send_file(
                 pdf_buffer,
