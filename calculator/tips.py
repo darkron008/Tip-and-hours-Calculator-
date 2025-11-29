@@ -65,32 +65,32 @@ def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
     else:
         raise ValueError(f"Unsupported file format: {ext}. Supported: xlsx, xls, csv")
     
-    # Skip rows that are mostly NaN/empty or non-meaningful headers
-    # Continue until we find a row with meaningful content
-    rows_to_skip = 0
-    if len(df) > 1:
-        for idx in range(min(10, len(df))):  # Check first 10 rows max
-            row = df.iloc[idx]
-            # Count non-NaN, non-empty values in the row
-            valid_count = sum(1 for v in row if not pd.isna(v) and str(v).strip() != "")
-            nan_count = sum(1 for v in row if pd.isna(v) or str(v).strip() == "")
-            
-            # Check if this looks like a report header row:
-            # - Mostly NaN/empty (>50% empty), OR
-            # - Only 1-2 valid values while most columns are "Unnamed" (spreadsheet with no header)
-            is_mostly_empty = nan_count > len(df.columns) * 0.5
-            is_report_title = valid_count <= 2 and any('unnamed' in str(c).lower() for c in df.columns)
-            
-            if is_mostly_empty or is_report_title:
-                rows_to_skip += 1
-            else:
-                # Found a likely header row with meaningful content
-                break
+    # Check if current columns look like garbage headers (e.g., "Sales Report", "Unnamed: X")
+    # If so, treat first row as data and find the real header row
+    cols_str = ' '.join(str(c).lower() for c in df.columns)
+    has_report_markers = 'sales report' in cols_str or ('unnamed' in cols_str and len(df) > 1)
     
-    # Skip the identified header rows
-    if rows_to_skip > 0:
-        df = df.iloc[rows_to_skip:].reset_index(drop=True)
-        logger.info(f"Skipped {rows_to_skip} header rows")
+    if has_report_markers and len(df) > 1:
+        logger.info(f"Detected report header row in columns. Looking for real header in data rows.")
+        # Try to find the first row that looks like a proper header
+        header_idx = None
+        for idx in range(min(10, len(df))):
+            row = df.iloc[idx]
+            # Check if this row has meaningful column names (not mostly NaN)
+            valid_count = sum(1 for v in row if not pd.isna(v) and str(v).strip() != "")
+            if valid_count >= len(df.columns) * 0.5:  # At least 50% non-empty
+                # Check if it looks like column names (mostly strings, reasonable length)
+                looks_like_header = sum(1 for v in row if isinstance(v, str) and 5 < len(str(v)) < 50) >= valid_count * 0.7
+                if looks_like_header:
+                    header_idx = idx
+                    break
+        
+        if header_idx is not None and header_idx > 0:
+            # Use this row as header and skip everything before it
+            new_header = [str(x).strip() for x in df.iloc[header_idx]]
+            df = df.iloc[header_idx + 1:].reset_index(drop=True)
+            df.columns = new_header
+            logger.info(f"Used row {header_idx} as header. New columns: {list(df.columns)}")
     
     return df
 
