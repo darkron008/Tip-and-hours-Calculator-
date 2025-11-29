@@ -75,8 +75,13 @@ def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
             valid_count = sum(1 for v in row if not pd.isna(v) and str(v).strip() != "")
             nan_count = sum(1 for v in row if pd.isna(v) or str(v).strip() == "")
             
-            # If row is mostly NaN/empty or contains mostly single long text (report title), skip it
-            if nan_count > len(df.columns) * 0.5 or (valid_count == 1 and len(str(row.iloc[0])) > 30):
+            # Check if this looks like a report header row:
+            # - Mostly NaN/empty (>50% empty), OR
+            # - Only 1-2 valid values while most columns are "Unnamed" (spreadsheet with no header)
+            is_mostly_empty = nan_count > len(df.columns) * 0.5
+            is_report_title = valid_count <= 2 and any('unnamed' in str(c).lower() for c in df.columns)
+            
+            if is_mostly_empty or is_report_title:
                 rows_to_skip += 1
             else:
                 # Found a likely header row with meaningful content
