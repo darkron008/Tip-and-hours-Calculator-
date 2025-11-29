@@ -292,10 +292,22 @@ def index():
             tips_for_date_range = dfs[0] if dfs else None
             pdf_buffer = _generate_pdf_report(export_df, tips_for_date_range)
 
+            # Generate filename with date range
+            filename = "Tip_Summary.pdf"
+            if tips_for_date_range is not None and 'Date' in tips_for_date_range.columns:
+                try:
+                    import pandas as pd
+                    dates = pd.to_datetime(tips_for_date_range['Date'], errors='coerce').dropna()
+                    if len(dates) > 0:
+                        last_date = dates.max().strftime('%m-%d-%Y')
+                        filename = f"Tip_Summary_{last_date}.pdf"
+                except Exception:
+                    pass  # Fallback to default filename
+
             return send_file(
                 pdf_buffer,
                 as_attachment=True,
-                download_name="Tip_Payroll_Summary.pdf",
+                download_name=filename,
                 mimetype="application/pdf",
             )
         except Exception as e:
