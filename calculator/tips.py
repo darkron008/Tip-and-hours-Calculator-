@@ -8,7 +8,7 @@ from calculator.clock import process_clock_csv
 logger = logging.getLogger(__name__)
 
 
-def is_clock_file(df: pd.DataFrame) -> bool:
+def is_clock_file(df: pd.DataFrame, filename: str = None) -> bool:
     """Heuristically determine if a DataFrame is clock/timesheet data.
     
     Clock files typically have:
@@ -16,8 +16,18 @@ def is_clock_file(df: pd.DataFrame) -> bool:
     - Date column
     - Hours column (but NOT tips column)
     
+    If filename is provided, uses it as a strong indicator (e.g., "clock" in filename).
+    
     Returns True if likely a clock file, False otherwise.
     """
+    # Check filename first if provided - strong indicator
+    if filename:
+        filename_lower = filename.lower()
+        if 'clock' in filename_lower or 'timesheet' in filename_lower:
+            return True
+        if 'sales' in filename_lower or 'tip' in filename_lower:
+            return False
+    
     # Convert column names to lowercase strings, handling non-string types
     cols_lower = {str(c).lower() for c in df.columns}
     

@@ -115,7 +115,7 @@ def index():
                 file_bytes = f.read()
                 df = read_file_to_df(file_bytes, f.filename)
                 
-                if is_clock_file(df):
+                if is_clock_file(df, f.filename):
                     clock_files.append((f.filename, file_bytes))
                     logger.info(f"Identified {f.filename} as clock/timesheet file")
                 else:
