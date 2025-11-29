@@ -168,15 +168,17 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
         dates = df_raw.iloc[date_row_idx, 1:].tolist()
         tip_values = df_raw.iloc[tips_row_idx, 1:].tolist()
         
-        # Create DataFrame
+        # Create DataFrame with a placeholder employee name since transposed format doesn't have employee info
         daily_tips_df = pd.DataFrame({
+            'Employee': 'Daily Tips',  # Placeholder - transposed format doesn't track individual employees
             'Date': dates,
-            'Tip Amount': tip_values
+            'Hours': 1,  # Placeholder - will be replaced with clock data if available
+            'Tips': tip_values
         })
         
-        # Clean Tip Amount column
-        daily_tips_df['Tip Amount'] = (
-            daily_tips_df['Tip Amount']
+        # Clean Tips column
+        daily_tips_df['Tips'] = (
+            daily_tips_df['Tips']
             .astype(str)
             .str.replace('$', '', regex=False)
             .str.replace(',', '', regex=False)
@@ -184,13 +186,13 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
             .str.replace(')', '', regex=False)
             .str.strip()
         )
-        daily_tips_df['Tip Amount'] = pd.to_numeric(daily_tips_df['Tip Amount'], errors='coerce')
+        daily_tips_df['Tips'] = pd.to_numeric(daily_tips_df['Tips'], errors='coerce')
         
         # Convert dates
         daily_tips_df['Date'] = pd.to_datetime(daily_tips_df['Date'], errors='coerce')
         
         # Remove rows with NaN dates or tips
-        daily_tips_df = daily_tips_df.dropna(subset=['Date', 'Tip Amount'])
+        daily_tips_df = daily_tips_df.dropna(subset=['Date', 'Tips'])
         
         logger.info(f"Extracted {len(daily_tips_df)} daily tips from transposed sales report")
         return daily_tips_df if len(daily_tips_df) > 0 else None
