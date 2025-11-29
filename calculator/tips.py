@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
     """Read Excel or CSV file from bytes and return DataFrame.
     
+    Attempts to detect and skip report headers (e.g., "Sales Report" in first row).
+    
     Args:
         file_bytes: Raw file content
         filename: Original filename (used to infer format)
@@ -24,11 +26,27 @@ def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     
     if ext in ("xlsx", "xls"):
-        return pd.read_excel(io.BytesIO(file_bytes))
+        df = pd.read_excel(io.BytesIO(file_bytes))
     elif ext == "csv":
-        return pd.read_csv(io.BytesIO(file_bytes))
+        df = pd.read_csv(io.BytesIO(file_bytes))
     else:
         raise ValueError(f"Unsupported file format: {ext}. Supported: xlsx, xls, csv")
+    
+    # If first row looks like a report header (single non-numeric value in first column),
+    # skip it and use the next row as header
+    if len(df) > 1 and len(df.columns) > 2:
+        first_row = df.iloc[0]
+        # Check if first row contains mostly NaN or non-numeric values (likely a header)
+        non_numeric_count = sum(1 for v in first_row if pd.isna(v) or (isinstance(v, str) and len(str(v)) > 0))
+        if non_numeric_count >= len(df.columns) * 0.7:  # 70% non-numeric = likely a header
+            # Try using first row as column names
+            new_header = df.iloc[0]
+            df = df[1:]
+            df.columns = new_header
+            df.reset_index(drop=True, inplace=True)
+            logger.info(f"Skipped report header row. New columns: {list(df.columns)}")
+    
+    return df
 
 
 def _normalize_df(df: pd.DataFrame, date_col: str, tips_col: str, hours_col: str, name_col: str) -> pd.DataFrame:
@@ -56,6 +74,9 @@ def _detect_columns(df: pd.DataFrame) -> Tuple[str, str, str, str]:
 
     Returns (date_col, tips_col, hours_col, name_col).
     Raises KeyError if any cannot be found.
+    
+    If columns are not found and many columns have "Unnamed" in them,
+    tries skipping the first row and rereading.
     """
     cols = [c for c in df.columns]
     lowered = {c: c.lower() for c in cols}
