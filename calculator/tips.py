@@ -428,20 +428,87 @@ def distribute_daily_tips_df(
                 date_col=clock_date_col,
                 hours_col=clock_hours_col,
             )
-            # Merge clock data into tips DataFrame to replace/supplement hours
-            # Match by date and employee name
-            df = df.merge(
-                processed_clock,
-                left_on=[df[date_col].dt.date, name_col],
-                right_on=["Date", "Employee"],
-                how="left",
+            
+            # Check if tips data has placeholder employee names (e.g., "Daily Tips")
+            # In this case, we need to expand the tips to individual employees from clock data
+            unique_names = df[name_col].unique()
+            is_daily_total_format = len(unique_names) == 1 and any(
+                placeholder in str(unique_names[0]).lower() 
+                for placeholder in ['daily tips', 'total', 'all staff', 'combined']
             )
-            # Use clock hours if available, otherwise fall back to original hours
-            df[hours_col] = df["Hours"].fillna(df[hours_col])
-            df = df.drop(columns=["Date", "Employee", "Hours"], errors="ignore")
+            
+            if is_daily_total_format:
+                # Expand daily totals across individual employees from clock data
+                logger.info(f"Detected daily total format ('{unique_names[0]}'). Expanding to individual employees from clock data.")
+                logger.debug(f"Processed clock columns: {list(processed_clock.columns)}")
+                logger.debug(f"Tips data columns: {list(df.columns)}")
+                
+                # Create expanded DataFrame with individual employees
+                expanded_rows = []
+                for _, tip_row in df.iterrows():
+                    # Safely get the date
+                    try:
+                        tip_date = pd.to_datetime(tip_row[date_col]).date()
+                    except:
+                        tip_date = tip_row[date_col]
+                        if hasattr(tip_date, 'date'):
+                            tip_date = tip_date.date()
+                    
+                    daily_tips_amount = float(tip_row[tips_col])
+                    
+                    # Get all employees who worked on this date
+                    # processed_clock has columns: [employee_col, date_col, 'Total Daily Hours']
+                    # Filter by date_col column
+                    employees_on_date = processed_clock[
+                        processed_clock[clock_date_col].dt.date == tip_date
+                    ]
+                    
+                    if len(employees_on_date) > 0:
+                        # Add one row per employee with the daily tips amount
+                        # The distribution will happen in the calculation loop below
+                        for _, emp_row in employees_on_date.iterrows():
+                            expanded_rows.append({
+                                date_col: tip_row[date_col],
+                                name_col: emp_row[clock_employee_col],
+                                tips_col: daily_tips_amount,
+                                hours_col: emp_row["Total Daily Hours"]
+                            })
+                    else:
+                        logger.debug(f"No employees found for date {tip_date}")
+                
+                if expanded_rows:
+                    # Reindex the expanded DataFrame with correct column names
+                    expanded_df = pd.DataFrame(expanded_rows)
+                    # Ensure column names match the original structure
+                    df = expanded_df[[date_col, name_col, tips_col, hours_col]].copy()
+                    df[date_col] = pd.to_datetime(df[date_col])
+                    df[tips_col] = pd.to_numeric(df[tips_col], errors='coerce')
+                    df[hours_col] = pd.to_numeric(df[hours_col], errors='coerce')
+                    logger.info(f"Expanded {len(df)} tip records across {len(df[name_col].unique())} employees")
+                else:
+                    logger.warning("Could not expand daily tips to individual employees - no matching dates found")
+            else:
+                # Standard merge by date and employee name
+                # Normalize dates to .date() format for matching
+                df['_date_key'] = df[date_col].apply(lambda x: pd.to_datetime(x).date() if not pd.isna(x) else None)
+                processed_clock['_date_key'] = processed_clock["Date"]
+                
+                df = df.merge(
+                    processed_clock[['_date_key', 'Employee', 'Hours']],
+                    left_on=['_date_key', name_col],
+                    right_on=['_date_key', 'Employee'],
+                    how="left",
+                    suffixes=('', '_clock')
+                )
+                # Use clock hours if available, otherwise fall back to original hours
+                df[hours_col] = df["Hours"].fillna(df[hours_col])
+                df = df.drop(columns=['_date_key', 'Employee', 'Hours'], errors="ignore")
+            
             logger.info(f"Merged clock data: {len(processed_clock)} employee-date records")
         except Exception as e:
             logger.warning(f"Could not merge clock data: {e}. Using hours from tips data.")
+            import traceback
+            logger.debug(traceback.format_exc())
 
     final_tip_distribution: Dict[str, float] = {}
     employee_hours_worked: Dict[str, float] = {}  # Track total hours per employee
