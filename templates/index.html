@@ -104,6 +104,25 @@
           </div>
 
           <!-- Column detection is automatic; no manual inputs required -->
+          
+          <label style="margin-top:1rem; font-weight:600;">
+            <input type="checkbox" id="advanced_mode" name="advanced_mode" /> Advanced: Override auto-detected columns
+          </label>
+
+          <!-- Advanced manual inputs (hidden by default) -->
+          <div id="advanced_inputs" style="display:none; background:#f5f5f5; padding:1rem; border-radius:6px; margin-top:1rem;">
+            <label for="date_col">Shift Date Column</label>
+            <input type="text" id="date_col" name="date_col" value="Shift Date" placeholder="e.g., Shift Date" />
+
+            <label for="tips_col">Daily Tips Column</label>
+            <input type="text" id="tips_col" name="tips_col" value="Daily Tip Total" placeholder="e.g., Daily Tip Total" />
+
+            <label for="hours_col">Hours Worked Column</label>
+            <input type="text" id="hours_col" name="hours_col" value="Hours Worked" placeholder="e.g., Hours Worked" />
+
+            <label for="name_col">Employee Name Column</label>
+            <input type="text" id="name_col" name="name_col" value="Employee Name" placeholder="e.g., Employee Name" />
+          </div>
 
           <div class="controls">
             <button type="submit" id="submitBtn">Process and Download Summary</button>
@@ -118,6 +137,13 @@
       const fileName = document.getElementById('fileName');
       const form = document.getElementById('form');
       const submitBtn = document.getElementById('submitBtn');
+      const advancedMode = document.getElementById('advanced_mode');
+      const advancedInputs = document.getElementById('advanced_inputs');
+
+      // Toggle advanced inputs when checkbox changes
+      advancedMode.addEventListener('change', () => {
+        advancedInputs.style.display = advancedMode.checked ? 'block' : 'none';
+      });
 
       // Click on drop zone to open file picker
       dropZone.addEventListener('click', () => fileInput.click());

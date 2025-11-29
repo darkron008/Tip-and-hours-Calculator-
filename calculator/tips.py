@@ -1,6 +1,9 @@
 from typing import Dict, Optional, List, Union, Tuple
+import logging
 import difflib
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_df(df: pd.DataFrame, date_col: str, tips_col: str, hours_col: str, name_col: str) -> pd.DataFrame:
@@ -97,6 +100,12 @@ def _detect_columns(df: pd.DataFrame) -> Tuple[str, str, str, str]:
 
     if missing:
         raise KeyError(f"Could not auto-detect required columns, missing: {missing}. Columns found: {cols}")
+
+    # Log the detected columns
+    logger.info(
+        f"Auto-detected columns: date_col={date_col}, tips_col={tips_col}, "
+        f"hours_col={hours_col}, name_col={name_col} from columns: {cols}"
+    )
 
     return date_col, tips_col, hours_col, name_col
 

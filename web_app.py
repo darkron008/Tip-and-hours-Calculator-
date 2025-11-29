@@ -100,17 +100,20 @@ def index():
 
         # Get column names from form (with defaults); support auto-detect
         auto_detect = request.form.get("auto_detect", "on") == "on"
+        advanced_mode = request.form.get("advanced_mode") == "on"
 
-        if auto_detect:
+        # In advanced mode, use provided values; otherwise auto-detect (pass None)
+        if advanced_mode:
+            date_col = request.form.get("date_col", "").strip() or None
+            tips_col = request.form.get("tips_col", "").strip() or None
+            hours_col = request.form.get("hours_col", "").strip() or None
+            name_col = request.form.get("name_col", "").strip() or None
+        else:
+            # Auto-detect by passing None
             date_col = None
             tips_col = None
             hours_col = None
             name_col = None
-        else:
-            date_col = request.form.get("date_col", "Shift Date")
-            tips_col = request.form.get("tips_col", "Daily Tip Total")
-            hours_col = request.form.get("hours_col", "Hours Worked")
-            name_col = request.form.get("name_col", "Employee Name")
 
         try:
             import pandas as pd
