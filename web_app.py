@@ -1,10 +1,83 @@
-from flask import Flask, request, render_template, send_file, flash
+from flask import Flask, request, render_template, send_file, flash, jsonify
 import io
 import os
 from calculator.tips import distribute_daily_tips_df
 
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+except Exception:
+    sentry_sdk = None
+
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-for-local-testing-only")
+
+# Production-friendly limits
+# Max upload size: default 16 MiB, can be overridden via env var MAX_CONTENT_LENGTH
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 16 * 1024 * 1024))
+
+# Optional Basic Auth: set BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD in env to enable
+BASIC_AUTH_USERNAME = os.environ.get("BASIC_AUTH_USERNAME")
+BASIC_AUTH_PASSWORD = os.environ.get("BASIC_AUTH_PASSWORD")
+
+# Initialize Sentry if DSN provided
+SENTRY_DSN = os.environ.get("SENTRY_DSN")
+if SENTRY_DSN and sentry_sdk is not None:
+    sentry_sdk.init(dsn=SENTRY_DSN, integrations=[FlaskIntegration()])
+
+
+def _check_basic_auth():
+    """Return True if auth is not enabled or if provided credentials match env vars."""
+    if not (BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD):
+        return True
+    auth = request.authorization
+    if not auth:
+        return False
+    return auth.username == BASIC_AUTH_USERNAME and auth.password == BASIC_AUTH_PASSWORD
+
+
+@app.before_request
+def require_basic_auth():
+    # Protect all routes when BASIC_AUTH_* are set
+    if BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD:
+        if not _check_basic_auth():
+            return (
+                ("Unauthorized", 401, {"WWW-Authenticate": 'Basic realm="Login Required"'}),
+            )
+
+
+ALLOWED_EXTENSIONS = {"xlsx", "xls"}
+
+
+def _allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return render_template("index.html", error="File too large. Max size is {} bytes.".format(app.config["MAX_CONTENT_LENGTH"])), 413
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify(status="ok"), 200
+
+
+@app.route("/ready", methods=["GET"])
+def ready():
+    # Basic readiness check: can import pandas and write an in-memory excel
+    try:
+        import pandas as pd
+        import tempfile
+
+        df = pd.DataFrame({"a": [1]})
+        with tempfile.TemporaryFile() as tf:
+            with pd.ExcelWriter(tf, engine="openpyxl") as w:
+                df.to_excel(w, index=False)
+        return jsonify(ready=True), 200
+    except Exception:
+        return jsonify(ready=False), 500
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -13,6 +86,10 @@ def index():
         uploaded = request.files.get("file")
         if not uploaded or uploaded.filename == "":
             flash("Please upload an Excel file.")
+            return render_template("index.html")
+
+        if not _allowed_file(uploaded.filename):
+            flash("Unsupported file type. Please upload an .xlsx or .xls file.")
             return render_template("index.html")
 
         # Get column names from form (with defaults)
@@ -46,6 +123,9 @@ def index():
                 mimetype=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
             )
         except Exception as e:
+            # Capture exception in Sentry (if configured)
+            if sentry_sdk is not None:
+                sentry_sdk.capture_exception(e)
             flash(f"Error processing file: {e}")
 
     return render_template("index.html")

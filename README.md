@@ -79,3 +79,32 @@ This app is ready for cloud deployment on **Heroku**, **Render**, **Railway**, o
 6. Deploy
 
 Your app will be live at a public URL. Share it to allow anyone to upload and download tip summaries.
+
+## Production Notes & Security
+
+- **Set a secure `SECRET_KEY`** in your Render/Heroku environment variables. Example:
+
+   ```bash
+   heroku config:set SECRET_KEY=$(openssl rand -hex 32)
+   ```
+
+- **Enable Basic Auth** (optional): set `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` in your environment to require HTTP Basic authentication for the web UI. Browsers will prompt for credentials.
+
+- **Sentry error monitoring**: set `SENTRY_DSN` to enable automatic error reporting to Sentry. Install Sentry on your Sentry account and add the DSN as an env var.
+
+- **Upload size limit**: controlled by `MAX_CONTENT_LENGTH` (bytes) env var; defaults to 16 MiB (16 * 1024 * 1024).
+
+- **Health & readiness endpoints**:
+   - `/health` — simple liveness check (200 OK)
+   - `/ready` — readiness check that attempts a lightweight pandas Excel write (200 OK when ready)
+
+- **Custom domain & HTTPS**: Render provides automatic HTTPS for linked domains. To use a custom domain:
+   1. Add the domain in the Render service settings
+   2. Follow the DNS instructions (create CNAME or A records as directed)
+   3. Wait for propagation; Render will provision TLS automatically
+
+## Recommended next steps for production
+
+- Rotate `SECRET_KEY` periodically and never commit it to source control.
+- Consider adding rate-limiting (Flask-Limiter) if you expect public traffic.
+- Monitor error logs in Render and Sentry, and enable alerts for high error rates.
