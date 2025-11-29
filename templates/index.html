@@ -103,22 +103,7 @@
             <input type="file" id="fileInput" name="file" accept=".xlsx,.xls" multiple />
           </div>
 
-          <!-- Column headers -->
-          <label for="date_col">Shift Date Column</label>
-          <input type="text" id="date_col" name="date_col" value="Shift Date" placeholder="e.g., Shift Date" />
-
-          <label for="tips_col">Daily Tips Column</label>
-          <input type="text" id="tips_col" name="tips_col" value="Daily Tip Total" placeholder="e.g., Daily Tip Total" />
-
-          <label for="hours_col">Hours Worked Column</label>
-          <input type="text" id="hours_col" name="hours_col" value="Hours Worked" placeholder="e.g., Hours Worked" />
-
-          <label for="name_col">Employee Name Column</label>
-          <input type="text" id="name_col" name="name_col" value="Employee Name" placeholder="e.g., Employee Name" />
-
-          <label style="margin-top:1rem; font-weight:600;">
-            <input type="checkbox" id="auto_detect" name="auto_detect" checked /> Auto-detect columns (recommended)
-          </label>
+          <!-- Column detection is automatic; no manual inputs required -->
 
           <div class="controls">
             <button type="submit" id="submitBtn">Process and Download Summary</button>
@@ -133,17 +118,6 @@
       const fileName = document.getElementById('fileName');
       const form = document.getElementById('form');
       const submitBtn = document.getElementById('submitBtn');
-      const autoDetect = document.getElementById('auto_detect');
-      const inputsToToggle = ['date_col','tips_col','hours_col','name_col'].map(id => document.getElementById(id));
-
-      // Toggle manual inputs when auto-detect checkbox changes
-      autoDetect.addEventListener('change', () => {
-        const disabled = autoDetect.checked;
-        inputsToToggle.forEach(i => {
-          i.disabled = disabled;
-          if (disabled) i.classList.add('disabled'); else i.classList.remove('disabled');
-        });
-      });
 
       // Click on drop zone to open file picker
       dropZone.addEventListener('click', () => fileInput.click());

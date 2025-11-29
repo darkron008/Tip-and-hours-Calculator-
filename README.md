@@ -29,9 +29,10 @@ python web_app.py
 
 **Features:**
 - Drag and drop your Excel file or click to browse
-- Customize column names on the form if your headers differ from defaults
 - Download the generated Excel summary automatically
 - In-memory Excel processing (no temp files left on disk)
+ - Download the generated Excel summary automatically
+ - In-memory Excel processing (no temp files left on disk)
 
 Multi-file uploads and auto-detection
 -----------------------------------
