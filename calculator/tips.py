@@ -66,31 +66,41 @@ def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
         raise ValueError(f"Unsupported file format: {ext}. Supported: xlsx, xls, csv")
     
     # Check if current columns look like garbage headers (e.g., "Sales Report", "Unnamed: X")
-    # If so, treat first row as data and find the real header row
+    # This happens when a report has a title row that pandas reads as column names
     cols_str = ' '.join(str(c).lower() for c in df.columns)
-    has_report_markers = 'sales report' in cols_str or ('unnamed' in cols_str and len(df) > 1)
+    unnamed_count = sum(1 for c in df.columns if 'unnamed' in str(c).lower())
+    is_likely_report = (unnamed_count >= len(df.columns) * 0.8) or ('report' in cols_str)
     
-    if has_report_markers and len(df) > 1:
-        logger.info(f"Detected report header row in columns. Looking for real header in data rows.")
+    if is_likely_report and len(df) > 1:
+        logger.info(f"Detected report-style header row (columns: {list(df.columns)[:3]}...). Scanning data rows for real header.")
+        
         # Try to find the first row that looks like a proper header
         header_idx = None
         for idx in range(min(10, len(df))):
             row = df.iloc[idx]
-            # Check if this row has meaningful column names (not mostly NaN)
+            # Count non-empty values
             valid_count = sum(1 for v in row if not pd.isna(v) and str(v).strip() != "")
-            if valid_count >= len(df.columns) * 0.5:  # At least 50% non-empty
-                # Check if it looks like column names (mostly strings, reasonable length)
-                looks_like_header = sum(1 for v in row if isinstance(v, str) and 5 < len(str(v)) < 50) >= valid_count * 0.7
-                if looks_like_header:
-                    header_idx = idx
-                    break
+            
+            # Count values that look like column headers (short strings, 2-50 chars)
+            header_like = sum(1 for v in row 
+                             if isinstance(v, str) and 2 <= len(str(v)) <= 50 and not any(c.isdigit() for c in str(v)[:1]))
+            
+            # If most values are non-empty and look like column names
+            if valid_count >= len(df.columns) * 0.6 and header_like >= valid_count * 0.6:
+                header_idx = idx
+                logger.info(f"Found header-like row at index {idx}: {list(row)[:5]}...")
+                break
         
-        if header_idx is not None and header_idx > 0:
-            # Use this row as header and skip everything before it
+        if header_idx is not None:
+            # Use this row as header and skip all rows before it
             new_header = [str(x).strip() for x in df.iloc[header_idx]]
             df = df.iloc[header_idx + 1:].reset_index(drop=True)
             df.columns = new_header
-            logger.info(f"Used row {header_idx} as header. New columns: {list(df.columns)}")
+            logger.info(f"Applied header from row {header_idx}. New columns: {list(df.columns)}")
+        else:
+            # If no good header found, at least skip the garbage row
+            logger.warning(f"Could not find a good header row in first 10 rows. Using row 0 as header.")
+            df = df.iloc[1:].reset_index(drop=True)
     
     return df
 
