@@ -18,13 +18,14 @@ def is_clock_file(df: pd.DataFrame) -> bool:
     
     Returns True if likely a clock file, False otherwise.
     """
-    cols_lower = {c.lower() for c in df.columns}
+    # Convert column names to lowercase strings, handling non-string types
+    cols_lower = {str(c).lower() for c in df.columns}
     
-    # Check for keywords
-    has_employee = any(kw in str(cols_lower) for kw in ['employee', 'name', 'staff', 'emp'])
-    has_date = any(kw in str(cols_lower) for kw in ['date', 'shift', 'clock'])
-    has_hours = any(kw in str(cols_lower) for kw in ['hour', 'hours', 'hrs', 'elapsed', 'time'])
-    has_tips = any(kw in str(cols_lower) for kw in ['tip', 'tips', 'gratuity', 'gratuities'])
+    # Check for keywords in column names
+    has_employee = any(kw in col for col in cols_lower for kw in ['employee', 'name', 'staff', 'emp'])
+    has_date = any(kw in col for col in cols_lower for kw in ['date', 'shift', 'clock'])
+    has_hours = any(kw in col for col in cols_lower for kw in ['hour', 'hours', 'hrs', 'elapsed', 'time'])
+    has_tips = any(kw in col for col in cols_lower for kw in ['tip', 'tips', 'gratuity', 'gratuities'])
     
     # Clock file: has employee, date, hours but NOT tips
     return has_employee and has_date and has_hours and not has_tips
@@ -61,8 +62,8 @@ def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
         # Check if first row contains mostly NaN or non-numeric values (likely a header)
         non_numeric_count = sum(1 for v in first_row if pd.isna(v) or (isinstance(v, str) and len(str(v)) > 0))
         if non_numeric_count >= len(df.columns) * 0.7:  # 70% non-numeric = likely a header
-            # Try using first row as column names
-            new_header = df.iloc[0]
+            # Try using first row as column names, converting to strings
+            new_header = [str(x) for x in df.iloc[0]]
             df = df[1:]
             df.columns = new_header
             df.reset_index(drop=True, inplace=True)
