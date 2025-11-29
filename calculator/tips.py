@@ -3,6 +3,7 @@ import logging
 import io
 import difflib
 import pandas as pd
+from calculator.clock import process_clock_csv
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +141,15 @@ def distribute_daily_tips_df(
     tips_col: Optional[str],
     hours_col: Optional[str],
     name_col: Optional[str],
+    clock_df: Optional[pd.DataFrame] = None,
+    clock_employee_col: Optional[str] = None,
+    clock_date_col: Optional[str] = None,
+    clock_hours_col: Optional[str] = None,
 ) -> (Dict[str, float], pd.DataFrame):
-    """Distribute tips given a pre-loaded DataFrame.
+    """Distribute tips given a pre-loaded DataFrame, with optional clock data integration.
+    
+    If clock_df is provided, hours will be sourced from clock data instead of the tips DataFrame.
+    This allows using actual timesheet hours for tip distribution rather than sales data hours.
 
     Returns a tuple of (final_tip_distribution_dict, export_dataframe).
     """
@@ -153,6 +161,31 @@ def distribute_daily_tips_df(
         date_col, tips_col, hours_col, name_col = detected
 
     df = _normalize_df(df, date_col, tips_col, hours_col, name_col)
+
+    # If clock data is provided, process it and merge with tips data
+    if clock_df is not None:
+        try:
+            # Process clock data to get daily hours per employee
+            processed_clock = process_clock_csv(
+                clock_df,
+                employee_col=clock_employee_col,
+                date_col=clock_date_col,
+                hours_col=clock_hours_col,
+            )
+            # Merge clock data into tips DataFrame to replace/supplement hours
+            # Match by date and employee name
+            df = df.merge(
+                processed_clock,
+                left_on=[df[date_col].dt.date, name_col],
+                right_on=["Date", "Employee"],
+                how="left",
+            )
+            # Use clock hours if available, otherwise fall back to original hours
+            df[hours_col] = df["Hours"].fillna(df[hours_col])
+            df = df.drop(columns=["Date", "Employee", "Hours"], errors="ignore")
+            logger.info(f"Merged clock data: {len(processed_clock)} employee-date records")
+        except Exception as e:
+            logger.warning(f"Could not merge clock data: {e}. Using hours from tips data.")
 
     final_tip_distribution: Dict[str, float] = {}
     daily_groups = df.groupby(df[date_col].dt.date)

@@ -1,9 +1,12 @@
 from flask import Flask, request, render_template, send_file, flash, jsonify
 import io
 import os
+import logging
 from calculator.tips import distribute_daily_tips_df, read_file_to_df
 from calculator.clock import process_clock_csv
 from calculator.sales import process_sales_csv
+
+logger = logging.getLogger(__name__)
 
 try:
     import sentry_sdk
@@ -87,7 +90,7 @@ def index():
     if request.method == "POST":
         uploaded_files = request.files.getlist("file")
         if not uploaded_files or all(f.filename == "" for f in uploaded_files):
-            flash("Please upload at least one Excel file.")
+            flash("Please upload at least one tips/sales file.")
             return render_template("index.html")
 
         # Validate each uploaded file
@@ -117,6 +120,27 @@ def index():
             hours_col = None
             name_col = None
 
+        # Check for optional clock data file
+        clock_file = request.files.get("clock_file")
+        clock_df = None
+        clock_employee_col = None
+        clock_date_col = None
+        clock_hours_col = None
+
+        if clock_file and clock_file.filename != "":
+            if _allowed_file(clock_file.filename):
+                try:
+                    clock_bytes = clock_file.read()
+                    clock_df = read_file_to_df(clock_bytes, clock_file.filename)
+                    # Get optional custom column names for clock data
+                    if advanced_mode:
+                        clock_employee_col = request.form.get("clock_employee_col", "").strip() or None
+                        clock_date_col = request.form.get("clock_date_col", "").strip() or None
+                        clock_hours_col = request.form.get("clock_hours_col", "").strip() or None
+                    logger.info("Clock file loaded successfully for integration with tip distribution")
+                except Exception as e:
+                    logger.warning(f"Could not load clock file: {e}. Proceeding without clock data.")
+
         try:
             import pandas as pd
 
@@ -126,9 +150,17 @@ def index():
                 df = read_file_to_df(file_bytes, f.filename)
                 dfs.append(df)
 
-            # Pass list of DataFrames to processor (supports concatenation)
+            # Pass list of DataFrames to processor with optional clock data
             final_dict, export_df = distribute_daily_tips_df(
-                dfs, date_col, tips_col, hours_col, name_col
+                dfs,
+                date_col,
+                tips_col,
+                hours_col,
+                name_col,
+                clock_df=clock_df,
+                clock_employee_col=clock_employee_col,
+                clock_date_col=clock_date_col,
+                clock_hours_col=clock_hours_col,
             )
 
             # Write export_df to an in-memory Excel file
@@ -148,61 +180,6 @@ def index():
             if sentry_sdk is not None:
                 sentry_sdk.capture_exception(e)
             flash(f"Error processing file: {e}")
-
-    return render_template("index.html")
-
-
-@app.route("/process-clock", methods=["GET", "POST"])
-def process_clock():
-    """Process clock/timesheet CSV and return daily hours summary."""
-    if request.method == "POST":
-        uploaded_file = request.files.get("clock_file")
-        if not uploaded_file or uploaded_file.filename == "":
-            flash("Please upload a clock/timesheet file.")
-            return render_template("index.html")
-
-        if not _allowed_file(uploaded_file.filename):
-            flash("Unsupported file type. Please upload .xlsx, .xls, or .csv files.")
-            return render_template("index.html")
-
-        try:
-            import pandas as pd
-
-            file_bytes = uploaded_file.read()
-            df = read_file_to_df(file_bytes, uploaded_file.filename)
-
-            # Get optional custom column names from form
-            employee_col = request.form.get("clock_employee_col", "Employee Name").strip() or "Employee Name"
-            date_col = request.form.get("clock_date_col", "Clock In Date").strip() or "Clock In Date"
-            hours_col = request.form.get("clock_hours_col", "Elapsed Hours").strip() or "Elapsed Hours"
-            date_format = request.form.get("clock_date_format", "%d-%b-%y").strip() or "%d-%b-%y"
-
-            # Process the clock data
-            daily_hours_df = process_clock_csv(
-                df,
-                employee_col=employee_col,
-                date_col=date_col,
-                hours_col=hours_col,
-                date_format=date_format,
-            )
-
-            # Write to in-memory Excel
-            output_io = io.BytesIO()
-            with pd.ExcelWriter(output_io, engine="openpyxl") as writer:
-                daily_hours_df.to_excel(writer, index=False, sheet_name="Daily Hours Summary")
-            output_io.seek(0)
-
-            return send_file(
-                output_io,
-                as_attachment=True,
-                download_name="Daily_Hours_Summary.xlsx",
-                mimetype=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-            )
-
-        except Exception as e:
-            if sentry_sdk is not None:
-                sentry_sdk.capture_exception(e)
-            flash(f"Error processing clock file: {e}")
 
     return render_template("index.html")
 

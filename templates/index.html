@@ -118,7 +118,6 @@
         <!-- Tab navigation -->
         <div class="tab-buttons">
           <button type="button" class="tab-button active" data-tab="tips">💰 Tip Distribution</button>
-          <button type="button" class="tab-button" data-tab="clock">⏱️ Clock Processing</button>
           <button type="button" class="tab-button" data-tab="sales">📊 Sales Processing</button>
         </div>
 
@@ -132,7 +131,7 @@
 
         <!-- Tip Distribution Tab -->
         <div id="tips" class="tab-content active">
-          <p>Drag and drop your Excel or CSV file to calculate and download the tip distribution summary.</p>
+          <p>Drag and drop your tips/sales file to calculate and download the tip distribution summary.</p>
 
           <form id="form_tips" method="post" enctype="multipart/form-data">
           <!-- Drop Zone -->
@@ -163,51 +162,38 @@
 
             <label for="name_col">Employee Name Column</label>
             <input type="text" id="name_col" name="name_col" value="Employee Name" placeholder="e.g., Employee Name" />
+
+            <label style="margin-top:1.5rem; color:#666; font-weight:600;">Optional: Clock/Timesheet Data</label>
+            <p style="color:#999; font-size:0.9rem; margin-bottom:0.5rem;">Upload a clock file to use actual timesheet hours instead of hours from the tips file.</p>
+
+            <label for="clock_employee_col">Clock Employee Column</label>
+            <input type="text" id="clock_employee_col" name="clock_employee_col" placeholder="e.g., Employee Name (auto-detect)" />
+
+            <label for="clock_date_col">Clock Date Column</label>
+            <input type="text" id="clock_date_col" name="clock_date_col" placeholder="e.g., Clock In Date (auto-detect)" />
+
+            <label for="clock_hours_col">Clock Hours Column</label>
+            <input type="text" id="clock_hours_col" name="clock_hours_col" placeholder="e.g., Elapsed Hours (auto-detect)" />
+          </div>
+
+          <!-- Optional clock file upload -->
+          <div style="margin-top:1.5rem; padding:1rem; background:#f9f9f9; border-radius:6px; border:1px solid #ddd;">
+            <label style="margin-top:0;">
+              <strong>Optional: Clock/Timesheet File</strong>
+              <p style="color:#666; font-size:0.9rem; margin:0.5rem 0 0 0;">Upload to use actual timesheet hours for tip distribution:</p>
+            </label>
+            <div class="drop-zone" id="dropZone_clock" style="margin-top:1rem; border-color:#999; background:#fafafa;">
+              <div class="drop-icon" style="font-size:1.5rem;">⏱️</div>
+              <div class="drop-text" style="color:#666;">Drag clock file here or click to browse</div>
+              <div class="file-name" id="fileName_clock"></div>
+              <input type="file" id="fileInput_clock" name="clock_file" accept=".xlsx,.xls,.csv" />
+            </div>
           </div>
 
           <div class="controls">
             <button type="submit" id="submitBtn">Process and Download Summary</button>
           </div>
         </form>
-        </div>
-
-        <!-- Clock Processing Tab -->
-        <div id="clock" class="tab-content">
-          <p>Upload a clock/timesheet CSV to aggregate daily hours by employee.</p>
-
-          <form id="form_clock" method="post" action="/process-clock" enctype="multipart/form-data">
-            <!-- Drop Zone for Clock -->
-            <div class="drop-zone" id="dropZone_clock">
-              <div class="drop-icon">⏱️</div>
-              <div class="drop-text">Drag and drop your clock/timesheet file here</div>
-              <div class="drop-hint">or click to browse</div>
-              <div class="file-name" id="fileName_clock"></div>
-              <input type="file" id="fileInput_clock" name="clock_file" accept=".xlsx,.xls,.csv" />
-            </div>
-
-            <label style="margin-top:1rem; font-weight:600;">
-              <input type="checkbox" id="clock_advanced_mode" name="clock_advanced_mode" /> Advanced: Custom column names
-            </label>
-
-            <!-- Advanced clock inputs (hidden by default) -->
-            <div id="clock_advanced_inputs" style="display:none; background:#f5f5f5; padding:1rem; border-radius:6px; margin-top:1rem;">
-              <label for="clock_employee_col">Employee Column</label>
-              <input type="text" id="clock_employee_col" name="clock_employee_col" value="Employee Name" placeholder="e.g., Employee Name" />
-
-              <label for="clock_date_col">Date Column</label>
-              <input type="text" id="clock_date_col" name="clock_date_col" value="Clock In Date" placeholder="e.g., Clock In Date" />
-
-              <label for="clock_hours_col">Hours Column</label>
-              <input type="text" id="clock_hours_col" name="clock_hours_col" value="Elapsed Hours" placeholder="e.g., Elapsed Hours" />
-
-              <label for="clock_date_format">Date Format</label>
-              <input type="text" id="clock_date_format" name="clock_date_format" value="%d-%b-%y" placeholder="e.g., %d-%b-%y" />
-            </div>
-
-            <div class="controls">
-              <button type="submit" id="submitBtn_clock">Process and Download Hours Summary</button>
-            </div>
-          </form>
         </div>
 
         <!-- Sales Processing Tab -->
@@ -324,19 +310,10 @@
         });
       });
 
-      // Clock Processing Tab
+      // Clock file upload (optional, within main form)
       const dropZone_clock = document.getElementById('dropZone_clock');
       const fileInput_clock = document.getElementById('fileInput_clock');
       const fileName_clock = document.getElementById('fileName_clock');
-      const form_clock = document.getElementById('form_clock');
-      const submitBtn_clock = document.getElementById('submitBtn_clock');
-      const advancedMode_clock = document.getElementById('clock_advanced_mode');
-      const advancedInputs_clock = document.getElementById('clock_advanced_inputs');
-
-      // Toggle advanced clock inputs
-      advancedMode_clock.addEventListener('change', () => {
-        advancedInputs_clock.style.display = advancedMode_clock.checked ? 'block' : 'none';
-      });
 
       // Clock file picker
       dropZone_clock.addEventListener('click', () => fileInput_clock.click());
@@ -369,17 +346,6 @@
           fileInput_clock.files = files;
           fileName_clock.textContent = '✓ ' + files[0].name;
           dropZone_clock.classList.add('active');
-        }
-      });
-
-      // Clock form submission
-      form_clock.addEventListener('submit', (e) => {
-        if (!fileInput_clock.files.length) {
-          e.preventDefault();
-          alert('Please select or drag a clock/timesheet file.');
-        } else {
-          submitBtn_clock.disabled = true;
-          submitBtn_clock.textContent = 'Processing...';
         }
       });
 
