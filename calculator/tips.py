@@ -489,13 +489,16 @@ def distribute_daily_tips_df(
                     ]
                     
                     if len(employees_on_date) > 0:
-                        # Add one row per employee with the daily tips amount
-                        # The distribution will happen in the calculation loop below
+                        # Add one row per employee with their proportional tip share
+                        # Divide the daily tips evenly across all employees who worked that day
+                        # (actual allocation will be by hours worked in the calculation loop)
+                        num_employees = len(employees_on_date)
+                        tip_per_employee = daily_tips_amount / num_employees
                         for _, emp_row in employees_on_date.iterrows():
                             expanded_rows.append({
                                 date_col: tip_row[date_col],
                                 name_col: emp_row[clock_employee_col],
-                                tips_col: daily_tips_amount,
+                                tips_col: tip_per_employee,
                                 hours_col: emp_row["Total Daily Hours"]
                             })
                     else:
