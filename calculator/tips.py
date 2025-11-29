@@ -421,6 +421,31 @@ def distribute_daily_tips_df(
     # If clock data is provided, process it and merge with tips data
     if clock_df is not None:
         try:
+            # Auto-detect clock columns if not provided
+            if clock_employee_col is None or clock_date_col is None or clock_hours_col is None:
+                logger.debug("Auto-detecting clock columns...")
+                cols_map = {c.lower(): c for c in clock_df.columns}
+                
+                if clock_employee_col is None:
+                    for variant in ['employee name', 'employee', 'name', 'staff']:
+                        if variant in cols_map:
+                            clock_employee_col = cols_map[variant]
+                            break
+                
+                if clock_date_col is None:
+                    for variant in ['clock in date', 'date', 'shift date', 'clock date']:
+                        if variant in cols_map:
+                            clock_date_col = cols_map[variant]
+                            break
+                
+                if clock_hours_col is None:
+                    for variant in ['elapsed hours', 'hours', 'hrs', 'worked hours', 'hours worked']:
+                        if variant in cols_map:
+                            clock_hours_col = cols_map[variant]
+                            break
+                
+                logger.debug(f"Auto-detected clock columns: employee={clock_employee_col}, date={clock_date_col}, hours={clock_hours_col}")
+            
             # Process clock data to get daily hours per employee
             processed_clock = process_clock_csv(
                 clock_df,
