@@ -152,16 +152,18 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
         if date_row_idx is None:
             return None
         
-        # Look for Tips row
+        # Look for Tips row - check for variations like "Tips", "Total", "Gratuity", etc.
         tips_row_idx = None
+        tip_keywords = ['tip', 'total', 'gratuity', 'gratuities', 'distributed']
         for idx in range(len(df_raw)):
-            row_label = str(df_raw.iloc[idx, 0]).lower()
-            if 'tip' in row_label:
+            row_label = str(df_raw.iloc[idx, 0]).lower().strip()
+            if any(kw in row_label for kw in tip_keywords):
                 tips_row_idx = idx
-                logger.info(f"Found Tips row at index {idx}")
+                logger.info(f"Found Tips row at index {idx} with label: {df_raw.iloc[idx, 0]}")
                 break
         
         if tips_row_idx is None:
+            logger.debug("No Tips row found - not a transposed sales report")
             return None
         
         # Extract dates and tips
