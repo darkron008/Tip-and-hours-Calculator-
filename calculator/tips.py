@@ -444,6 +444,7 @@ def distribute_daily_tips_df(
             logger.warning(f"Could not merge clock data: {e}. Using hours from tips data.")
 
     final_tip_distribution: Dict[str, float] = {}
+    employee_hours_worked: Dict[str, float] = {}  # Track total hours per employee
     daily_groups = df.groupby(df[date_col].dt.date)
 
     for date, day_data in daily_groups:
@@ -461,8 +462,29 @@ def distribute_daily_tips_df(
             tip_share_ratio = employee_hours / day_total_staff_hours
             employee_daily_tip = day_total_tips * tip_share_ratio
             final_tip_distribution[name] = final_tip_distribution.get(name, 0.0) + employee_daily_tip
+            # Track hours worked for each employee
+            employee_hours_worked[name] = employee_hours_worked.get(name, 0.0) + employee_hours
 
-    export_df = pd.DataFrame(list(final_tip_distribution.items()), columns=["Employee Name", "Total Tip Share"])
+    # Create export DataFrame with employee name, total hours, and total tip share
+    export_data = []
+    for name in final_tip_distribution.keys():
+        export_data.append({
+            "Employee Name": name,
+            "Total Hours Worked": round(employee_hours_worked.get(name, 0.0), 2),
+            "Total Tip Share": round(final_tip_distribution[name], 2)
+        })
+    
+    export_df = pd.DataFrame(export_data)
+    # Sort by employee name for consistent output
+    export_df = export_df.sort_values("Employee Name").reset_index(drop=True)
+    
+    # Add summary row with totals
+    summary_row = pd.DataFrame([{
+        "Employee Name": "TOTAL",
+        "Total Hours Worked": export_df["Total Hours Worked"].sum(),
+        "Total Tip Share": round(export_df["Total Tip Share"].sum(), 2)
+    }])
+    export_df = pd.concat([export_df, summary_row], ignore_index=True)
     return final_tip_distribution, export_df
 
 
