@@ -144,40 +144,7 @@
             <input type="file" id="fileInput" name="files" accept=".xlsx,.xls,.csv" multiple required />
           </div>
 
-          <!-- Column detection is automatic; no manual inputs required -->
-          
-          <label style="margin-top:1.5rem; font-weight:600;">
-            <input type="checkbox" id="advanced_mode" name="advanced_mode" /> Advanced: Override auto-detected columns
-          </label>
-
-          <!-- Advanced manual inputs (hidden by default) -->
-          <div id="advanced_inputs" style="display:none; background:#f5f5f5; padding:1rem; border-radius:6px; margin-top:1rem;">
-            <label style="color:#666; font-weight:600; margin-bottom:0.5rem; display:block;">Tips/Sales Data Columns</label>
-            
-            <label for="date_col">Shift Date Column</label>
-            <input type="text" id="date_col" name="date_col" value="Shift Date" placeholder="e.g., Shift Date" />
-
-            <label for="tips_col">Daily Tips Column</label>
-            <input type="text" id="tips_col" name="tips_col" value="Daily Tip Total" placeholder="e.g., Daily Tip Total" />
-
-            <label for="hours_col">Hours Worked Column</label>
-            <input type="text" id="hours_col" name="hours_col" value="Hours Worked" placeholder="e.g., Hours Worked" />
-
-            <label for="name_col">Employee Name Column</label>
-            <input type="text" id="name_col" name="name_col" value="Employee Name" placeholder="e.g., Employee Name" />
-
-            <label style="margin-top:1.5rem; color:#666; font-weight:600; display:block;">Clock/Timesheet Data Columns</label>
-            <p style="color:#999; font-size:0.9rem; margin-bottom:0.5rem;">Customize column names if they differ from defaults:</p>
-
-            <label for="clock_employee_col">Clock Employee Column</label>
-            <input type="text" id="clock_employee_col" name="clock_employee_col" placeholder="e.g., Employee Name (auto-detect)" />
-
-            <label for="clock_date_col">Clock Date Column</label>
-            <input type="text" id="clock_date_col" name="clock_date_col" placeholder="e.g., Clock In Date (auto-detect)" />
-
-            <label for="clock_hours_col">Clock Hours Column</label>
-            <input type="text" id="clock_hours_col" name="clock_hours_col" placeholder="e.g., Elapsed Hours (auto-detect)" />
-          </div>
+          <!-- Column detection is automatic -->
 
           <div class="controls">
             <button type="submit" id="submitBtn">Process and Download Summary</button>
@@ -193,13 +160,6 @@
       const fileName = document.getElementById('fileName');
       const form = document.getElementById('form_tips');
       const submitBtn = document.getElementById('submitBtn');
-      const advancedMode = document.getElementById('advanced_mode');
-      const advancedInputs = document.getElementById('advanced_inputs');
-
-      // Toggle advanced inputs when checkbox changes
-      advancedMode.addEventListener('change', () => {
-        advancedInputs.style.display = advancedMode.checked ? 'block' : 'none';
-      });
 
       // Click on drop zone to open file picker
       dropZone.addEventListener('click', () => fileInput.click());

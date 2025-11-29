@@ -130,27 +130,14 @@ def index():
             flash("No clock/timesheet file detected. Please ensure one of your files contains employee, date, and hours columns.")
             return render_template("index.html")
 
-        # Get column names from form (with defaults); support auto-detect
-        advanced_mode = request.form.get("advanced_mode") == "on"
-
-        # In advanced mode, use provided values; otherwise auto-detect (pass None)
-        if advanced_mode:
-            date_col = request.form.get("date_col", "").strip() or None
-            tips_col = request.form.get("tips_col", "").strip() or None
-            hours_col = request.form.get("hours_col", "").strip() or None
-            name_col = request.form.get("name_col", "").strip() or None
-            clock_employee_col = request.form.get("clock_employee_col", "").strip() or None
-            clock_date_col = request.form.get("clock_date_col", "").strip() or None
-            clock_hours_col = request.form.get("clock_hours_col", "").strip() or None
-        else:
-            # Auto-detect by passing None
-            date_col = None
-            tips_col = None
-            hours_col = None
-            name_col = None
-            clock_employee_col = None
-            clock_date_col = None
-            clock_hours_col = None
+        # Always auto-detect columns (pass None to detection functions)
+        date_col = None
+        tips_col = None
+        hours_col = None
+        name_col = None
+        clock_employee_col = None
+        clock_date_col = None
+        clock_hours_col = None
 
         try:
             import pandas as pd
