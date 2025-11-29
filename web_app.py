@@ -4,7 +4,6 @@ import os
 import logging
 from calculator.tips import distribute_daily_tips_df, read_file_to_df
 from calculator.clock import process_clock_csv
-from calculator.sales import process_sales_csv
 
 logger = logging.getLogger(__name__)
 
@@ -180,59 +179,6 @@ def index():
             if sentry_sdk is not None:
                 sentry_sdk.capture_exception(e)
             flash(f"Error processing file: {e}")
-
-    return render_template("index.html")
-
-
-@app.route("/process-sales", methods=["GET", "POST"])
-def process_sales():
-    """Process sales CSV and extract daily tip amounts."""
-    if request.method == "POST":
-        uploaded_file = request.files.get("sales_file")
-        if not uploaded_file or uploaded_file.filename == "":
-            flash("Please upload a sales file.")
-            return render_template("index.html")
-
-        if not _allowed_file(uploaded_file.filename):
-            flash("Unsupported file type. Please upload .xlsx, .xls, or .csv files.")
-            return render_template("index.html")
-
-        try:
-            import pandas as pd
-
-            file_bytes = uploaded_file.read()
-            df = read_file_to_df(file_bytes, uploaded_file.filename)
-
-            # Get optional custom parameters from form
-            tips_row_label = request.form.get("sales_tips_row_label", "Tips").strip() or "Tips"
-            sales_col_label = request.form.get("sales_col_label", "Sales").strip() or "Sales"
-            data_start_col = int(request.form.get("sales_data_start_col", "2") or "2")
-
-            # Process the sales data
-            daily_tips_df = process_sales_csv(
-                df,
-                tips_row_label=tips_row_label,
-                sales_col_label=sales_col_label,
-                data_start_col=data_start_col,
-            )
-
-            # Write to in-memory Excel
-            output_io = io.BytesIO()
-            with pd.ExcelWriter(output_io, engine="openpyxl") as writer:
-                daily_tips_df.to_excel(writer, index=False, sheet_name="Daily Tips")
-            output_io.seek(0)
-
-            return send_file(
-                output_io,
-                as_attachment=True,
-                download_name="Daily_Tips_Summary.xlsx",
-                mimetype=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-            )
-
-        except Exception as e:
-            if sentry_sdk is not None:
-                sentry_sdk.capture_exception(e)
-            flash(f"Error processing sales file: {e}")
 
     return render_template("index.html")
 
