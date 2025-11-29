@@ -83,31 +83,48 @@ def ready():
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        uploaded = request.files.get("file")
-        if not uploaded or uploaded.filename == "":
-            flash("Please upload an Excel file.")
+        uploaded_files = request.files.getlist("file")
+        if not uploaded_files or all(f.filename == "" for f in uploaded_files):
+            flash("Please upload at least one Excel file.")
             return render_template("index.html")
 
-        if not _allowed_file(uploaded.filename):
-            flash("Unsupported file type. Please upload an .xlsx or .xls file.")
+        # Validate each uploaded file
+        valid_files = []
+        for f in uploaded_files:
+            if f and f.filename and _allowed_file(f.filename):
+                valid_files.append(f)
+
+        if not valid_files:
+            flash("Unsupported file type. Please upload .xlsx or .xls files.")
             return render_template("index.html")
 
-        # Get column names from form (with defaults)
-        date_col = request.form.get("date_col", "Shift Date")
-        tips_col = request.form.get("tips_col", "Daily Tip Total")
-        hours_col = request.form.get("hours_col", "Hours Worked")
-        name_col = request.form.get("name_col", "Employee Name")
+        # Get column names from form (with defaults); support auto-detect
+        auto_detect = request.form.get("auto_detect", "on") == "on"
+
+        if auto_detect:
+            date_col = None
+            tips_col = None
+            hours_col = None
+            name_col = None
+        else:
+            date_col = request.form.get("date_col", "Shift Date")
+            tips_col = request.form.get("tips_col", "Daily Tip Total")
+            hours_col = request.form.get("hours_col", "Hours Worked")
+            name_col = request.form.get("name_col", "Employee Name")
 
         try:
-            # Read uploaded file into a DataFrame directly from the file stream
-            file_bytes = uploaded.read()
-            input_io = io.BytesIO(file_bytes)
             import pandas as pd
 
-            df = pd.read_excel(input_io)
+            dfs = []
+            for f in valid_files:
+                file_bytes = f.read()
+                input_io = io.BytesIO(file_bytes)
+                df = pd.read_excel(input_io)
+                dfs.append(df)
 
+            # Pass list of DataFrames to processor (supports concatenation)
             final_dict, export_df = distribute_daily_tips_df(
-                df, date_col, tips_col, hours_col, name_col
+                dfs, date_col, tips_col, hours_col, name_col
             )
 
             # Write export_df to an in-memory Excel file

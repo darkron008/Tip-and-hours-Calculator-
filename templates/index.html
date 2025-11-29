@@ -100,7 +100,7 @@
             <div class="drop-text">Drag and drop your Excel file here</div>
             <div class="drop-hint">or click to browse</div>
             <div class="file-name" id="fileName"></div>
-            <input type="file" id="fileInput" name="file" accept=".xlsx,.xls" />
+            <input type="file" id="fileInput" name="file" accept=".xlsx,.xls" multiple />
           </div>
 
           <!-- Column headers -->
@@ -116,6 +116,10 @@
           <label for="name_col">Employee Name Column</label>
           <input type="text" id="name_col" name="name_col" value="Employee Name" placeholder="e.g., Employee Name" />
 
+          <label style="margin-top:1rem; font-weight:600;">
+            <input type="checkbox" id="auto_detect" name="auto_detect" checked /> Auto-detect columns (recommended)
+          </label>
+
           <div class="controls">
             <button type="submit" id="submitBtn">Process and Download Summary</button>
           </div>
@@ -129,14 +133,26 @@
       const fileName = document.getElementById('fileName');
       const form = document.getElementById('form');
       const submitBtn = document.getElementById('submitBtn');
+      const autoDetect = document.getElementById('auto_detect');
+      const inputsToToggle = ['date_col','tips_col','hours_col','name_col'].map(id => document.getElementById(id));
+
+      // Toggle manual inputs when auto-detect checkbox changes
+      autoDetect.addEventListener('change', () => {
+        const disabled = autoDetect.checked;
+        inputsToToggle.forEach(i => {
+          i.disabled = disabled;
+          if (disabled) i.classList.add('disabled'); else i.classList.remove('disabled');
+        });
+      });
 
       // Click on drop zone to open file picker
       dropZone.addEventListener('click', () => fileInput.click());
 
-      // File picker change
+      // File picker change (supports multiple files)
       fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
-          fileName.textContent = '✓ ' + e.target.files[0].name;
+          const names = Array.from(e.target.files).map(f => f.name).slice(0, 5);
+          fileName.textContent = '✓ ' + names.join(', ');
           dropZone.classList.add('active');
         }
       });
@@ -160,7 +176,8 @@
         const files = e.dataTransfer.files;
         if (files.length > 0) {
           fileInput.files = files;
-          fileName.textContent = '✓ ' + files[0].name;
+          const names = Array.from(files).map(f => f.name).slice(0, 5);
+          fileName.textContent = '✓ ' + names.join(', ');
           dropZone.classList.add('active');
         }
       });
@@ -169,7 +186,7 @@
       form.addEventListener('submit', (e) => {
         if (!fileInput.files.length) {
           e.preventDefault();
-          alert('Please select or drag an Excel file.');
+          alert('Please select or drag at least one Excel file.');
         } else {
           submitBtn.disabled = true;
           submitBtn.textContent = 'Processing...';

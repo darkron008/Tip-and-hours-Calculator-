@@ -1,4 +1,5 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Union, Tuple
+import difflib
 import pandas as pd
 
 
@@ -15,17 +16,109 @@ def _normalize_df(df: pd.DataFrame, date_col: str, tips_col: str, hours_col: str
     return df
 
 
+def _concat_if_needed(df_or_list: Union[pd.DataFrame, List[pd.DataFrame]]) -> pd.DataFrame:
+    if isinstance(df_or_list, list):
+        # concat and ignore index
+        return pd.concat(df_or_list, ignore_index=True)
+    return df_or_list
+
+
+def _detect_columns(df: pd.DataFrame) -> Tuple[str, str, str, str]:
+    """Try to heuristically detect the four required columns in a DataFrame.
+
+    Returns (date_col, tips_col, hours_col, name_col).
+    Raises KeyError if any cannot be found.
+    """
+    cols = [c for c in df.columns]
+    lowered = {c: c.lower() for c in cols}
+
+    # helper to find column by keywords
+    def find_by_keywords(keywords):
+        for orig, low in lowered.items():
+            for kw in keywords:
+                if kw in low:
+                    return orig
+        return None
+
+    # common candidates
+    date_kw = ["date", "shift", "day", "work date", "shift date"]
+    tips_kw = ["tip", "tips", "gratuity", "gratuities"]
+    hours_kw = ["hour", "hours", "hrs", "worked", "time"]
+    name_kw = ["name", "employee", "staff", "emp"]
+
+    date_col = find_by_keywords(date_kw)
+    tips_col = find_by_keywords(tips_kw)
+    hours_col = find_by_keywords(hours_kw)
+    name_col = find_by_keywords(name_kw)
+
+    # fallback: look for columns whose dtype or sample values look like dates/times
+    if date_col is None:
+        for c in cols:
+            try:
+                pd.to_datetime(df[c].dropna().iloc[:5])
+                date_col = c
+                break
+            except Exception:
+                continue
+
+    missing = [n for n, v in (
+        ("date_col", date_col),
+        ("tips_col", tips_col),
+        ("hours_col", hours_col),
+        ("name_col", name_col),
+    ) if v is None]
+
+    # If still missing, try fuzzy matching against column names
+    if missing:
+        lowered_values = list(lowered.values())
+        for key, kw_list in ("date_col", date_kw), ("tips_col", tips_kw), ("hours_col", hours_kw), ("name_col", name_kw):
+            # only try for ones that are still missing
+            if locals().get(key) is not None:
+                continue
+            for kw in kw_list:
+                # find closest matching column lower-cased
+                matches = difflib.get_close_matches(kw, lowered_values, n=1, cutoff=0.6)
+                if matches:
+                    # find original column name that matches the lowered match
+                    low_match = matches[0]
+                    for orig, low in lowered.items():
+                        if low == low_match:
+                            locals()[key] = orig
+                            break
+                if locals().get(key) is not None:
+                    break
+
+    missing = [n for n, v in (
+        ("date_col", date_col),
+        ("tips_col", tips_col),
+        ("hours_col", hours_col),
+        ("name_col", name_col),
+    ) if v is None]
+
+    if missing:
+        raise KeyError(f"Could not auto-detect required columns, missing: {missing}. Columns found: {cols}")
+
+    return date_col, tips_col, hours_col, name_col
+
+
 def distribute_daily_tips_df(
-    df: pd.DataFrame,
-    date_col: str,
-    tips_col: str,
-    hours_col: str,
-    name_col: str,
+    df_or_list: Union[pd.DataFrame, List[pd.DataFrame]],
+    date_col: Optional[str],
+    tips_col: Optional[str],
+    hours_col: Optional[str],
+    name_col: Optional[str],
 ) -> (Dict[str, float], pd.DataFrame):
     """Distribute tips given a pre-loaded DataFrame.
 
     Returns a tuple of (final_tip_distribution_dict, export_dataframe).
     """
+    df = _concat_if_needed(df_or_list)
+
+    # Auto-detect column names when any are not provided
+    if not (date_col and tips_col and hours_col and name_col):
+        detected = _detect_columns(df)
+        date_col, tips_col, hours_col, name_col = detected
+
     df = _normalize_df(df, date_col, tips_col, hours_col, name_col)
 
     final_tip_distribution: Dict[str, float] = {}
@@ -52,7 +145,7 @@ def distribute_daily_tips_df(
 
 
 def distribute_daily_tips(
-    input_file_path: str,
+    input_file_path: Union[str, List[str]],
     output_file_path: str,
     date_col: str,
     tips_col: str,
@@ -60,7 +153,13 @@ def distribute_daily_tips(
     name_col: str,
 ) -> Optional[Dict[str, float]]:
     """Backward-compatible wrapper: read from path and write to path using the df-based helper."""
-    df = pd.read_excel(input_file_path)
+    # Allow a single path or a list of paths
+    if isinstance(input_file_path, list):
+        dfs = [pd.read_excel(p) for p in input_file_path]
+        df = pd.concat(dfs, ignore_index=True)
+    else:
+        df = pd.read_excel(input_file_path)
+
     final, export_df = distribute_daily_tips_df(df, date_col, tips_col, hours_col, name_col)
     export_df.to_excel(output_file_path, index=False, sheet_name="Tip Distribution Summary")
     return final

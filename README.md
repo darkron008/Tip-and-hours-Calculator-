@@ -33,6 +33,15 @@ python web_app.py
 - Download the generated Excel summary automatically
 - In-memory Excel processing (no temp files left on disk)
 
+Multi-file uploads and auto-detection
+-----------------------------------
+
+- The web UI supports uploading multiple Excel files at once. Click the drop zone or drag multiple files into it. The server will combine rows from all uploaded files and compute tip distribution across matching dates.
+- By default the UI tries to auto-detect the column names for `Shift Date`, `Daily Tip Total`, `Hours Worked`, and `Employee Name`. This is recommended for convenience — if auto-detect fails, uncheck the "Auto-detect columns" checkbox and provide the column names manually.
+- Programmatic wrappers (`calculator.tips.distribute_daily_tips_df`) accept `None` for column names, which triggers the same auto-detection heuristic.
+
+If you want to customize the column detection logic, consider modifying `calculator/tips.py` which contains the `_detect_columns` helper that uses keyword heuristics and fuzzy matching.
+
 ## Cloud Deployment
 
 This app is ready for cloud deployment on **Heroku**, **Render**, **Railway**, or any platform that supports Python/Gunicorn.
