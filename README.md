@@ -13,8 +13,8 @@ python -m pytest -q
 Examples:
 
 ```powershell
-python app.py tip --amount 100 --percent 15
-python app.py pay --hours 40 --rate 15.50
+python cli.py tip --amount 100 --percent 15
+python cli.py pay --hours 40 --rate 15.50
 ```
 
 ## Web UI with Drag & Drop
