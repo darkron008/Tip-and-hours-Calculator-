@@ -132,19 +132,32 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
             return None
         
         # Look for a row that contains dates (typically has many date-like values)
+        # Focus on rows with date patterns like "28-Jun", "29-Jun", etc.
         date_row_idx = None
         for idx in range(min(15, len(df_raw))):
             row = df_raw.iloc[idx]
-            # Try to parse values as dates
+            # Try to parse values as dates, but prefer short date formats like "28-Jun"
             date_count = 0
+            short_date_count = 0
             for val in row[1:]:  # Skip first column (usually row label)
+                val_str = str(val).strip()
+                if not val_str or pd.isna(val):
+                    continue
+                # Check for short date format (e.g., "28-Jun", "1-Jul")
+                if len(val_str) <= 10 and '-' in val_str and any(c.isalpha() for c in val_str):
+                    short_date_count += 1
                 try:
-                    pd.to_datetime(str(val))
+                    pd.to_datetime(val_str)
                     date_count += 1
                 except:
                     pass
-            # If at least 50% of the row can be parsed as dates, this is likely the date row
-            if date_count >= len(row[1:]) * 0.5:
+            
+            # Prefer short date formats, but accept if majority can be parsed as dates
+            if short_date_count >= len(row[1:]) * 0.8:  # 80% short date format
+                date_row_idx = idx
+                logger.info(f"Found date row at index {idx} (short date format)")
+                break
+            elif date_count >= len(row[1:]) * 0.8 and idx > 2:  # Avoid early rows with mixed text
                 date_row_idx = idx
                 logger.info(f"Found date row at index {idx}")
                 break
@@ -170,6 +183,8 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
         dates = df_raw.iloc[date_row_idx, 1:].tolist()
         tip_values = df_raw.iloc[tips_row_idx, 1:].tolist()
         
+        logger.debug(f"Extracted {len(dates)} dates and {len(tip_values)} tip values")
+        
         # Create DataFrame with a placeholder employee name since transposed format doesn't have employee info
         daily_tips_df = pd.DataFrame({
             'Employee': 'Daily Tips',  # Placeholder - transposed format doesn't track individual employees
@@ -177,6 +192,8 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
             'Hours': 1,  # Placeholder - will be replaced with clock data if available
             'Tips': tip_values
         })
+        
+        logger.debug(f"Created DataFrame with {len(daily_tips_df)} rows")
         
         # Clean Tips column
         daily_tips_df['Tips'] = (
@@ -190,8 +207,30 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
         )
         daily_tips_df['Tips'] = pd.to_numeric(daily_tips_df['Tips'], errors='coerce')
         
-        # Convert dates
-        daily_tips_df['Date'] = pd.to_datetime(daily_tips_df['Date'], errors='coerce')
+        logger.debug(f"After tip column cleaning, {daily_tips_df['Tips'].notna().sum()} non-NaN tips")
+        
+        # Convert dates - try multiple formats since the file might have dates like "28-Jun" without year
+        logger.debug(f"Sample dates before conversion: {daily_tips_df['Date'].head(3).tolist()}")
+        
+        # First try parsing with explicit format handling
+        def parse_date(date_str):
+            if pd.isna(date_str) or str(date_str).strip() == '':
+                return pd.NaT
+            try:
+                # Try direct parsing first
+                return pd.to_datetime(date_str)
+            except:
+                try:
+                    # If that fails, try common formats like "28-Jun" (add current/report year)
+                    # For this file, dates are from Jun-Jul 2025
+                    return pd.to_datetime(f"{date_str}-25", format="%d-%b-%y")
+                except:
+                    return pd.NaT
+        
+        daily_tips_df['Date'] = daily_tips_df['Date'].apply(parse_date)
+        
+        logger.debug(f"After date conversion, {daily_tips_df['Date'].notna().sum()} valid dates")
+        logger.debug(f"Sample dates after conversion: {daily_tips_df['Date'].head(3).tolist()}")
         
         # Remove rows with NaN dates or tips
         daily_tips_df = daily_tips_df.dropna(subset=['Date', 'Tips'])
@@ -200,7 +239,9 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
         return daily_tips_df if len(daily_tips_df) > 0 else None
         
     except Exception as e:
-        logger.debug(f"Not a transposed sales report: {e}")
+        logger.debug(f"Not a transposed sales report: {type(e).__name__}: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
         return None
 
 
