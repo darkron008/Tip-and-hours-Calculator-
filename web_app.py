@@ -87,30 +87,47 @@ def ready():
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        # Clock file is now required
-        clock_file = request.files.get("clock_file")
-        if not clock_file or clock_file.filename == "":
-            flash("Please upload a clock/timesheet file.")
+        # Get all uploaded files
+        uploaded_files = request.files.getlist("files")
+        if not uploaded_files or all(f.filename == "" for f in uploaded_files):
+            flash("Please upload at least one file.")
             return render_template("index.html")
 
-        if not _allowed_file(clock_file.filename):
-            flash("Unsupported clock file type. Please upload .xlsx, .xls, or .csv files.")
-            return render_template("index.html")
-
-        # Tips/sales file is optional
-        uploaded_files = request.files.getlist("file")
+        # Validate and separate files into clock and tips
         valid_files = []
-        if uploaded_files and not all(f.filename == "" for f in uploaded_files):
-            for f in uploaded_files:
-                if f and f.filename and _allowed_file(f.filename):
-                    valid_files.append(f)
+        for f in uploaded_files:
+            if f and f.filename and _allowed_file(f.filename):
+                valid_files.append(f)
         
-        if uploaded_files and not valid_files:
-            flash("Unsupported tips file type. Please upload .xlsx, .xls, or .csv files.")
+        if not valid_files:
+            flash("Unsupported file type. Please upload .xlsx, .xls, or .csv files.")
             return render_template("index.html")
 
-        if not valid_files:
-            flash("Please upload at least one tips/sales file or provide tip data.")
+        # Import here to use the new differentiation function
+        from calculator.tips import is_clock_file
+
+        # Separate files by type
+        clock_files = []
+        tips_files = []
+
+        for f in valid_files:
+            try:
+                file_bytes = f.read()
+                df = read_file_to_df(file_bytes, f.filename)
+                
+                if is_clock_file(df):
+                    clock_files.append((f.filename, file_bytes))
+                    logger.info(f"Identified {f.filename} as clock/timesheet file")
+                else:
+                    tips_files.append((f.filename, file_bytes))
+                    logger.info(f"Identified {f.filename} as tips/sales file")
+            except Exception as e:
+                logger.error(f"Could not identify file type for {f.filename}: {e}")
+                flash(f"Error reading file {f.filename}: {e}")
+                return render_template("index.html")
+
+        if not clock_files:
+            flash("No clock/timesheet file detected. Please ensure one of your files contains employee, date, and hours columns.")
             return render_template("index.html")
 
         # Get column names from form (with defaults); support auto-detect
@@ -138,21 +155,21 @@ def index():
         try:
             import pandas as pd
 
-            # Load required clock file
-            clock_bytes = clock_file.read()
-            clock_df = read_file_to_df(clock_bytes, clock_file.filename)
-            logger.info("Clock file loaded successfully")
+            # Load clock file (use first clock file if multiple identified)
+            clock_bytes = clock_files[0][1]
+            clock_df = read_file_to_df(clock_bytes, clock_files[0][0])
+            logger.info(f"Clock file {clock_files[0][0]} loaded successfully")
 
-            # Load optional tips/sales files
+            # Load tips/sales files if any
             dfs = []
-            for f in valid_files:
-                file_bytes = f.read()
-                df = read_file_to_df(file_bytes, f.filename)
+            for filename, file_bytes in tips_files:
+                df = read_file_to_df(file_bytes, filename)
                 dfs.append(df)
+                logger.info(f"Tips file {filename} loaded successfully")
 
             # Pass list of DataFrames to processor with clock data as primary
             final_dict, export_df = distribute_daily_tips_df(
-                dfs,
+                dfs if dfs else None,
                 date_col,
                 tips_col,
                 hours_col,

@@ -8,6 +8,28 @@ from calculator.clock import process_clock_csv
 logger = logging.getLogger(__name__)
 
 
+def is_clock_file(df: pd.DataFrame) -> bool:
+    """Heuristically determine if a DataFrame is clock/timesheet data.
+    
+    Clock files typically have:
+    - Employee/name column
+    - Date column
+    - Hours column (but NOT tips column)
+    
+    Returns True if likely a clock file, False otherwise.
+    """
+    cols_lower = {c.lower() for c in df.columns}
+    
+    # Check for keywords
+    has_employee = any(kw in str(cols_lower) for kw in ['employee', 'name', 'staff', 'emp'])
+    has_date = any(kw in str(cols_lower) for kw in ['date', 'shift', 'clock'])
+    has_hours = any(kw in str(cols_lower) for kw in ['hour', 'hours', 'hrs', 'elapsed', 'time'])
+    has_tips = any(kw in str(cols_lower) for kw in ['tip', 'tips', 'gratuity', 'gratuities'])
+    
+    # Clock file: has employee, date, hours but NOT tips
+    return has_employee and has_date and has_hours and not has_tips
+
+
 def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
     """Read Excel or CSV file from bytes and return DataFrame.
     
@@ -169,11 +191,50 @@ def distribute_daily_tips_df(
 ) -> (Dict[str, float], pd.DataFrame):
     """Distribute tips given a pre-loaded DataFrame, with optional clock data integration.
     
-    If clock_df is provided, hours will be sourced from clock data instead of the tips DataFrame.
-    This allows using actual timesheet hours for tip distribution rather than sales data hours.
+    If clock_df is provided, hours will be sourced from clock data.
+    If df_or_list is None or empty, uses clock data only for tip distribution calculation.
 
     Returns a tuple of (final_tip_distribution_dict, export_dataframe).
     """
+    # Handle case where only clock data is provided (no tips file)
+    if df_or_list is None or (isinstance(df_or_list, list) and not df_or_list):
+        if clock_df is None:
+            raise ValueError("Either tips/sales data or clock data must be provided")
+        
+        # Use clock data as the primary data source
+        df = clock_df.copy()
+        
+        # Detect or use provided clock columns
+        if clock_employee_col is None or clock_date_col is None or clock_hours_col is None:
+            # Try to auto-detect clock columns
+            cols_lower = {c.lower() for c in df.columns}
+            if clock_employee_col is None:
+                clock_employee_col = next((c for c in df.columns if c.lower() in ['employee', 'name', 'staff']), None)
+            if clock_date_col is None:
+                clock_date_col = next((c for c in df.columns if c.lower() in ['date', 'shift date', 'clock in date']), None)
+            if clock_hours_col is None:
+                clock_hours_col = next((c for c in df.columns if c.lower() in ['hours', 'elapsed hours', 'hrs']), None)
+        
+        if not all([clock_employee_col, clock_date_col, clock_hours_col]):
+            raise ValueError("Could not detect required clock columns: employee, date, hours")
+        
+        # Rename clock columns to standard names for processing
+        df = df.rename(columns={
+            clock_employee_col: 'Employee',
+            clock_date_col: 'Date',
+            clock_hours_col: 'Hours'
+        })
+        
+        # Create a simple summary: employee total tips (using hours as proxy if no tips)
+        df['Date'] = pd.to_datetime(df['Date'])
+        df['Hours'] = pd.to_numeric(df['Hours'], errors='coerce').fillna(0.0)
+        
+        summary = df.groupby('Employee')['Hours'].sum().reset_index()
+        summary.columns = ['Employee Name', 'Total Tip Share']  # Use Hours as proxy for tips
+        
+        logger.info(f"Using clock data only: {len(summary)} employees")
+        return {}, summary
+    
     df = _concat_if_needed(df_or_list)
 
     # Auto-detect column names when any are not provided

@@ -130,32 +130,18 @@
 
         <!-- Tip Distribution Tab -->
         <div id="tips" class="tab-content active">
-          <p>Upload your clock/timesheet file and tips/sales data to calculate accurate tip distribution based on actual worked hours.</p>
+          <p>Drag and drop your clock/timesheet and tips/sales files. The program will automatically differentiate between them.</p>
 
           <form id="form_tips" method="post" enctype="multipart/form-data">
-          <!-- Clock File (Primary) -->
-          <label style="margin-top:0; font-weight:600; display:block; margin-bottom:0.5rem;">Clock/Timesheet File</label>
-          <p style="color:#666; font-size:0.9rem; margin:0 0 1rem 0;">Upload your clock/timesheet data to determine actual hours worked:</p>
-          <div class="drop-zone" id="dropZone_clock">
-            <div class="drop-icon">⏱️</div>
-            <div class="drop-text">Drag and drop your clock/timesheet file here</div>
+          <!-- Unified File Upload -->
+          <label style="margin-top:0; font-weight:600; display:block; margin-bottom:0.5rem;">Upload Files</label>
+          <p style="color:#666; font-size:0.9rem; margin:0 0 1rem 0;">Upload clock/timesheet file and optionally a tips/sales file:</p>
+          <div class="drop-zone" id="dropZone">
+            <div class="drop-icon">📁</div>
+            <div class="drop-text">Drag and drop your files here</div>
             <div class="drop-hint">or click to browse</div>
-            <div class="file-name" id="fileName_clock"></div>
-            <input type="file" id="fileInput_clock" name="clock_file" accept=".xlsx,.xls,.csv" required />
-          </div>
-
-          <!-- Tips/Sales File (Optional) -->
-          <div style="margin-top:1.5rem; padding:1rem; background:#f9f9f9; border-radius:6px; border:1px solid #ddd;">
-            <label style="margin-top:0; display:block;">
-              <strong>Tips/Sales File (Optional)</strong>
-              <p style="color:#666; font-size:0.9rem; margin:0.5rem 0 0 0;">Upload to provide tip amounts. If not provided, you can specify them manually.</p>
-            </label>
-            <div class="drop-zone" id="dropZone" style="margin-top:1rem; border-color:#999; background:#fafafa;">
-              <div class="drop-icon" style="font-size:1.5rem;">📁</div>
-              <div class="drop-text" style="color:#666;">Drag tips/sales file here or click to browse (optional)</div>
-              <div class="file-name" id="fileName"></div>
-              <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv" multiple />
-            </div>
+            <div class="file-name" id="fileName"></div>
+            <input type="file" id="fileInput" name="files" accept=".xlsx,.xls,.csv" multiple required />
           </div>
 
           <!-- Column detection is automatic; no manual inputs required -->
@@ -260,45 +246,6 @@
         } else {
           submitBtn.disabled = true;
           submitBtn.textContent = 'Processing...';
-        }
-      });
-
-      // Clock file upload (optional, within main form)
-      const dropZone_clock = document.getElementById('dropZone_clock');
-      const fileInput_clock = document.getElementById('fileInput_clock');
-      const fileName_clock = document.getElementById('fileName_clock');
-
-      // Clock file picker
-      dropZone_clock.addEventListener('click', () => fileInput_clock.click());
-
-      fileInput_clock.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-          fileName_clock.textContent = '✓ ' + e.target.files[0].name;
-          dropZone_clock.classList.add('active');
-        }
-      });
-
-      // Drag over
-      dropZone_clock.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone_clock.classList.add('dragover');
-      });
-
-      // Drag leave
-      dropZone_clock.addEventListener('dragleave', () => {
-        dropZone_clock.classList.remove('dragover');
-      });
-
-      // Drop
-      dropZone_clock.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone_clock.classList.remove('dragover');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-          fileInput_clock.files = files;
-          fileName_clock.textContent = '✓ ' + files[0].name;
-          dropZone_clock.classList.add('active');
         }
       });
 

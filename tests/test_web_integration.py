@@ -40,8 +40,8 @@ def test_flask_upload_two_files_returns_excel(tmp_path):
 
     data = {
         "auto_detect": "on",
-        "clock_file": (io.BytesIO(b_clock), "clock.xlsx"),
-        "file": [
+        "files": [
+            (io.BytesIO(b_clock), "clock.xlsx"),
             (io.BytesIO(b1), "input1.xlsx"),
             (io.BytesIO(b2), "input2.xlsx"),
         ],
