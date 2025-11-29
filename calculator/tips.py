@@ -58,49 +58,43 @@ def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
     """
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     
+    # Read WITHOUT header first so we can examine all rows
     if ext in ("xlsx", "xls"):
-        df = pd.read_excel(io.BytesIO(file_bytes))
+        df = pd.read_excel(io.BytesIO(file_bytes), header=None)
     elif ext == "csv":
-        df = pd.read_csv(io.BytesIO(file_bytes))
+        df = pd.read_csv(io.BytesIO(file_bytes), header=None)
     else:
         raise ValueError(f"Unsupported file format: {ext}. Supported: xlsx, xls, csv")
     
-    # Check if current columns look like garbage headers (e.g., "Sales Report", "Unnamed: X")
-    # This happens when a report has a title row that pandas reads as column names
-    cols_str = ' '.join(str(c).lower() for c in df.columns)
-    unnamed_count = sum(1 for c in df.columns if 'unnamed' in str(c).lower())
-    is_likely_report = (unnamed_count >= len(df.columns) * 0.8) or ('report' in cols_str)
-    
-    if is_likely_report and len(df) > 1:
-        logger.info(f"Detected report-style header row (columns: {list(df.columns)[:3]}...). Scanning data rows for real header.")
-        
-        # Try to find the first row that looks like a proper header
-        header_idx = None
-        for idx in range(min(10, len(df))):
+    # Now find the actual header row by scanning from top
+    header_idx = 0
+    if len(df) > 1:
+        for idx in range(min(15, len(df))):
             row = df.iloc[idx]
-            # Count non-empty values
-            valid_count = sum(1 for v in row if not pd.isna(v) and str(v).strip() != "")
+            row_str = ' '.join(str(c).lower() for c in row)
             
-            # Count values that look like column headers (short strings, 2-50 chars)
-            header_like = sum(1 for v in row 
-                             if isinstance(v, str) and 2 <= len(str(v)) <= 50 and not any(c.isdigit() for c in str(v)[:1]))
+            # Skip rows that are clearly not headers:
+            # - Row is mostly NaN/empty
+            # - Row contains "report" or "sales" (report title rows)
+            non_empty = sum(1 for v in row if not pd.isna(v) and str(v).strip() != "")
+            has_report_keyword = any(kw in row_str for kw in ['report', 'sales', 'summary', 'total'])
             
-            # If most values are non-empty and look like column names
-            if valid_count >= len(df.columns) * 0.6 and header_like >= valid_count * 0.6:
-                header_idx = idx
-                logger.info(f"Found header-like row at index {idx}: {list(row)[:5]}...")
-                break
-        
-        if header_idx is not None:
-            # Use this row as header and skip all rows before it
-            new_header = [str(x).strip() for x in df.iloc[header_idx]]
-            df = df.iloc[header_idx + 1:].reset_index(drop=True)
-            df.columns = new_header
-            logger.info(f"Applied header from row {header_idx}. New columns: {list(df.columns)}")
-        else:
-            # If no good header found, at least skip the garbage row
-            logger.warning(f"Could not find a good header row in first 10 rows. Using row 0 as header.")
-            df = df.iloc[1:].reset_index(drop=True)
+            if non_empty < len(df.columns) * 0.4:  # Less than 40% filled
+                continue
+            if has_report_keyword and non_empty < len(df.columns) * 0.7:  # Report line but sparse
+                continue
+                
+            # This looks like a header row
+            header_idx = idx
+            logger.info(f"Found header at row {idx}: {list(row)[:5]}...")
+            break
+    
+    # Apply the header
+    header_row = [str(x).strip() for x in df.iloc[header_idx]]
+    df = df.iloc[header_idx + 1:].reset_index(drop=True)
+    df.columns = header_row
+    
+    logger.info(f"Applied header from row {header_idx}. Columns: {list(df.columns)}")
     
     return df
 
