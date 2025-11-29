@@ -23,6 +23,37 @@
       h1 { color: #333; margin-top: 0; }
       p { color: #666; }
 
+      .tab-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        border-bottom: 2px solid #ddd;
+        padding-bottom: 0.5rem;
+      }
+      .tab-button {
+        background: none;
+        border: none;
+        color: #999;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+        font-size: 1rem;
+        transition: color 0.2s;
+      }
+      .tab-button.active {
+        color: #667eea;
+      }
+      .tab-button:hover {
+        color: #667eea;
+      }
+
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+
       .drop-zone {
         border: 2px dashed #667eea;
         border-radius: 8px;
@@ -60,7 +91,7 @@
       input[type=text]:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
 
       .controls { margin-top: 2rem; }
-      button { 
+      button[type=submit] { 
         width: 100%;
         padding: 0.75rem 1.5rem;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -72,9 +103,9 @@
         cursor: pointer;
         transition: transform 0.2s, box-shadow 0.2s;
       }
-      button:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
-      button:active { transform: translateY(0); }
-      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      button[type=submit]:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
+      button[type=submit]:active { transform: translateY(0); }
+      button[type=submit]:disabled { opacity: 0.6; cursor: not-allowed; }
 
       .error { background: #fee; color: #c33; padding: 0.75rem; border-radius: 6px; margin: 1rem 0; border-left: 4px solid #c33; }
     </style>
@@ -83,7 +114,12 @@
     <div class="container">
       <div class="card">
         <h1>💸 Tip & Hours Calculator</h1>
-        <p>Drag and drop your Excel or CSV file to calculate and download the tip distribution summary.</p>
+        
+        <!-- Tab navigation -->
+        <div class="tab-buttons">
+          <button type="button" class="tab-button active" data-tab="tips">💰 Tip Distribution</button>
+          <button type="button" class="tab-button" data-tab="clock">⏱️ Clock Processing</button>
+        </div>
 
         {% with messages = get_flashed_messages() %}
           {% if messages %}
@@ -93,7 +129,11 @@
           {% endif %}
         {% endwith %}
 
-        <form id="form" method="post" enctype="multipart/form-data">
+        <!-- Tip Distribution Tab -->
+        <div id="tips" class="tab-content active">
+          <p>Drag and drop your Excel or CSV file to calculate and download the tip distribution summary.</p>
+
+          <form id="form_tips" method="post" enctype="multipart/form-data">
           <!-- Drop Zone -->
           <div class="drop-zone" id="dropZone">
             <div class="drop-icon">📁</div>
@@ -128,6 +168,46 @@
             <button type="submit" id="submitBtn">Process and Download Summary</button>
           </div>
         </form>
+        </div>
+
+        <!-- Clock Processing Tab -->
+        <div id="clock" class="tab-content">
+          <p>Upload a clock/timesheet CSV to aggregate daily hours by employee.</p>
+
+          <form id="form_clock" method="post" action="/process-clock" enctype="multipart/form-data">
+            <!-- Drop Zone for Clock -->
+            <div class="drop-zone" id="dropZone_clock">
+              <div class="drop-icon">⏱️</div>
+              <div class="drop-text">Drag and drop your clock/timesheet file here</div>
+              <div class="drop-hint">or click to browse</div>
+              <div class="file-name" id="fileName_clock"></div>
+              <input type="file" id="fileInput_clock" name="clock_file" accept=".xlsx,.xls,.csv" />
+            </div>
+
+            <label style="margin-top:1rem; font-weight:600;">
+              <input type="checkbox" id="clock_advanced_mode" name="clock_advanced_mode" /> Advanced: Custom column names
+            </label>
+
+            <!-- Advanced clock inputs (hidden by default) -->
+            <div id="clock_advanced_inputs" style="display:none; background:#f5f5f5; padding:1rem; border-radius:6px; margin-top:1rem;">
+              <label for="clock_employee_col">Employee Column</label>
+              <input type="text" id="clock_employee_col" name="clock_employee_col" value="Employee Name" placeholder="e.g., Employee Name" />
+
+              <label for="clock_date_col">Date Column</label>
+              <input type="text" id="clock_date_col" name="clock_date_col" value="Clock In Date" placeholder="e.g., Clock In Date" />
+
+              <label for="clock_hours_col">Hours Column</label>
+              <input type="text" id="clock_hours_col" name="clock_hours_col" value="Elapsed Hours" placeholder="e.g., Elapsed Hours" />
+
+              <label for="clock_date_format">Date Format</label>
+              <input type="text" id="clock_date_format" name="clock_date_format" value="%d-%b-%y" placeholder="e.g., %d-%b-%y" />
+            </div>
+
+            <div class="controls">
+              <button type="submit" id="submitBtn_clock">Process and Download Hours Summary</button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
 
@@ -135,7 +215,7 @@
       const dropZone = document.getElementById('dropZone');
       const fileInput = document.getElementById('fileInput');
       const fileName = document.getElementById('fileName');
-      const form = document.getElementById('form');
+      const form = document.getElementById('form_tips');
       const submitBtn = document.getElementById('submitBtn');
       const advancedMode = document.getElementById('advanced_mode');
       const advancedInputs = document.getElementById('advanced_inputs');
@@ -186,10 +266,83 @@
       form.addEventListener('submit', (e) => {
         if (!fileInput.files.length) {
           e.preventDefault();
-          alert('Please select or drag at least one Excel file.');
+          alert('Please select or drag at least one Excel or CSV file.');
         } else {
           submitBtn.disabled = true;
           submitBtn.textContent = 'Processing...';
+        }
+      });
+
+      // Tab switching
+      const tabButtons = document.querySelectorAll('.tab-button');
+      const tabContents = document.querySelectorAll('.tab-content');
+
+      tabButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const tabName = btn.getAttribute('data-tab');
+          tabButtons.forEach(b => b.classList.remove('active'));
+          tabContents.forEach(c => c.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById(tabName).classList.add('active');
+        });
+      });
+
+      // Clock Processing Tab
+      const dropZone_clock = document.getElementById('dropZone_clock');
+      const fileInput_clock = document.getElementById('fileInput_clock');
+      const fileName_clock = document.getElementById('fileName_clock');
+      const form_clock = document.getElementById('form_clock');
+      const submitBtn_clock = document.getElementById('submitBtn_clock');
+      const advancedMode_clock = document.getElementById('clock_advanced_mode');
+      const advancedInputs_clock = document.getElementById('clock_advanced_inputs');
+
+      // Toggle advanced clock inputs
+      advancedMode_clock.addEventListener('change', () => {
+        advancedInputs_clock.style.display = advancedMode_clock.checked ? 'block' : 'none';
+      });
+
+      // Clock file picker
+      dropZone_clock.addEventListener('click', () => fileInput_clock.click());
+
+      fileInput_clock.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          fileName_clock.textContent = '✓ ' + e.target.files[0].name;
+          dropZone_clock.classList.add('active');
+        }
+      });
+
+      // Drag over
+      dropZone_clock.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone_clock.classList.add('dragover');
+      });
+
+      // Drag leave
+      dropZone_clock.addEventListener('dragleave', () => {
+        dropZone_clock.classList.remove('dragover');
+      });
+
+      // Drop
+      dropZone_clock.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone_clock.classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          fileInput_clock.files = files;
+          fileName_clock.textContent = '✓ ' + files[0].name;
+          dropZone_clock.classList.add('active');
+        }
+      });
+
+      // Clock form submission
+      form_clock.addEventListener('submit', (e) => {
+        if (!fileInput_clock.files.length) {
+          e.preventDefault();
+          alert('Please select or drag a clock/timesheet file.');
+        } else {
+          submitBtn_clock.disabled = true;
+          submitBtn_clock.textContent = 'Processing...';
         }
       });
     </script>
