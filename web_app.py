@@ -2,10 +2,106 @@ from flask import Flask, request, render_template, send_file, flash, jsonify
 import io
 import os
 import logging
+from datetime import datetime
 from calculator.tips import distribute_daily_tips_df, read_file_to_df, _extract_from_transposed_sales_report
 from calculator.clock import process_clock_csv
 
 logger = logging.getLogger(__name__)
+
+
+def _generate_pdf_report(export_df):
+    """Generate a PDF report from the export DataFrame using reportlab."""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+    
+    # Create PDF in memory
+    pdf_buffer = io.BytesIO()
+    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Title
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        textColor=colors.HexColor('#333333'),
+        spaceAfter=6,
+        alignment=TA_CENTER
+    )
+    title = Paragraph("Tip & Hours Distribution Report", title_style)
+    elements.append(title)
+    
+    # Date
+    date_style = ParagraphStyle(
+        'DateStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#666666'),
+        spaceAfter=12,
+        alignment=TA_CENTER
+    )
+    date_para = Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", date_style)
+    elements.append(date_para)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Convert DataFrame to table data
+    table_data = [['Employee Name', 'Total Hours Worked', 'Total Tip Share']]
+    
+    for _, row in export_df.iterrows():
+        name = row['Employee Name']
+        hours = f"{row['Total Hours Worked']:.2f}"
+        tips = f"${row['Total Tip Share']:,.2f}"
+        
+        # Bold the TOTAL row
+        if name == 'TOTAL':
+            table_data.append([f"**{name}**", f"**{hours}**", f"**{tips}**"])
+        else:
+            table_data.append([name, hours, tips])
+    
+    # Create table
+    table = Table(table_data, colWidths=[3*inch, 1.5*inch, 1.5*inch])
+    
+    # Style the table
+    table.setStyle(TableStyle([
+        # Header row
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        
+        # Data rows
+        ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+        ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -2), 10),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f9f9f9')]),
+        
+        # Total row (last row)
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e3e9ff')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 11),
+        ('TOPPADDING', (0, -1), (-1, -1), 12),
+        ('BOTTOMPADDING', (0, -1), (-1, -1), 12),
+        
+        # Grid
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dddddd')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    
+    elements.append(table)
+    
+    # Build PDF
+    doc.build(elements)
+    pdf_buffer.seek(0)
+    return pdf_buffer
 
 try:
     import sentry_sdk
@@ -173,17 +269,14 @@ def index():
                 clock_hours_col=clock_hours_col,
             )
 
-            # Write export_df to an in-memory Excel file
-            output_io = io.BytesIO()
-            with pd.ExcelWriter(output_io, engine="openpyxl") as writer:
-                export_df.to_excel(writer, index=False, sheet_name="Tip Distribution Summary")
-            output_io.seek(0)
+            # Generate PDF report
+            pdf_buffer = _generate_pdf_report(export_df)
 
             return send_file(
-                output_io,
+                pdf_buffer,
                 as_attachment=True,
-                download_name="Tip_Payroll_Summary_OUTPUT.xlsx",
-                mimetype=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                download_name="Tip_Payroll_Summary.pdf",
+                mimetype="application/pdf",
             )
         except Exception as e:
             # Capture exception in Sentry (if configured)

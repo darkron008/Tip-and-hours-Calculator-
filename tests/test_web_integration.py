@@ -10,7 +10,7 @@ def make_excel_bytes(df: pd.DataFrame) -> bytes:
     return bio.getvalue()
 
 
-def test_flask_upload_two_files_returns_excel(tmp_path):
+def test_flask_upload_two_files_returns_pdf(tmp_path):
     # Import app from web_app
     from web_app import app
 
@@ -50,12 +50,6 @@ def test_flask_upload_two_files_returns_excel(tmp_path):
     resp = client.post("/", data=data, content_type="multipart/form-data")
 
     assert resp.status_code == 200
-    # Response should be an Excel attachment
-    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in resp.content_type
-
-    # Read returned Excel
-    returned = io.BytesIO(resp.data)
-    out_df = pd.read_excel(returned, sheet_name="Tip Distribution Summary")
-
-    assert "Employee Name" in out_df.columns
-    assert "Total Tip Share" in out_df.columns
+    # Response should be a PDF attachment
+    assert "application/pdf" in resp.content_type
+    assert b"%PDF" in resp.data  # PDF files start with %PDF magic number
