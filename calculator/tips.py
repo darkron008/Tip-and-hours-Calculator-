@@ -34,7 +34,7 @@ def is_clock_file(df: pd.DataFrame) -> bool:
 def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
     """Read Excel or CSV file from bytes and return DataFrame.
     
-    Attempts to detect and skip report headers (e.g., "Sales Report" in first row).
+    Attempts to detect and skip report headers and multi-row headers.
     
     Args:
         file_bytes: Raw file content
@@ -55,19 +55,27 @@ def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
     else:
         raise ValueError(f"Unsupported file format: {ext}. Supported: xlsx, xls, csv")
     
-    # If first row looks like a report header (single non-numeric value in first column),
-    # skip it and use the next row as header
-    if len(df) > 1 and len(df.columns) > 2:
-        first_row = df.iloc[0]
-        # Check if first row contains mostly NaN or non-numeric values (likely a header)
-        non_numeric_count = sum(1 for v in first_row if pd.isna(v) or (isinstance(v, str) and len(str(v)) > 0))
-        if non_numeric_count >= len(df.columns) * 0.7:  # 70% non-numeric = likely a header
-            # Try using first row as column names, converting to strings
-            new_header = [str(x) for x in df.iloc[0]]
-            df = df[1:]
-            df.columns = new_header
-            df.reset_index(drop=True, inplace=True)
-            logger.info(f"Skipped report header row. New columns: {list(df.columns)}")
+    # Skip rows that are mostly NaN/empty or non-meaningful headers
+    # Continue until we find a row with meaningful content
+    rows_to_skip = 0
+    if len(df) > 1:
+        for idx in range(min(10, len(df))):  # Check first 10 rows max
+            row = df.iloc[idx]
+            # Count non-NaN, non-empty values in the row
+            valid_count = sum(1 for v in row if not pd.isna(v) and str(v).strip() != "")
+            nan_count = sum(1 for v in row if pd.isna(v) or str(v).strip() == "")
+            
+            # If row is mostly NaN/empty or contains mostly single long text (report title), skip it
+            if nan_count > len(df.columns) * 0.5 or (valid_count == 1 and len(str(row.iloc[0])) > 30):
+                rows_to_skip += 1
+            else:
+                # Found a likely header row with meaningful content
+                break
+    
+    # Skip the identified header rows
+    if rows_to_skip > 0:
+        df = df.iloc[rows_to_skip:].reset_index(drop=True)
+        logger.info(f"Skipped {rows_to_skip} header rows")
     
     return df
 
