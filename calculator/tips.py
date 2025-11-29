@@ -99,6 +99,107 @@ def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
     return df
 
 
+def _is_transposed_sales_report(df: pd.DataFrame) -> bool:
+    """Check if this is a transposed sales report with Tips row."""
+    if len(df) < 2:
+        return False
+    # Check for a 'Tips' row indicator (usually in first column)
+    first_col = df.iloc[:, 0] if len(df.columns) > 0 else None
+    if first_col is None:
+        return False
+    has_tips_row = any('tip' in str(v).lower() for v in first_col)
+    return has_tips_row
+
+
+def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> Optional[pd.DataFrame]:
+    """
+    Extract daily tips from a transposed sales report format where:
+    - Dates are in a header row (typically around row 9)
+    - Tips values are in a 'Tips' labeled row
+    - Each column represents a day
+    
+    Returns a DataFrame with 'Date' and 'Tip Amount' columns, or None if not this format.
+    """
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    
+    try:
+        # Try reading with no header first to find the date row
+        if ext in ("xlsx", "xls"):
+            df_raw = pd.read_excel(io.BytesIO(file_bytes), header=None)
+        elif ext == "csv":
+            df_raw = pd.read_csv(io.BytesIO(file_bytes), header=None)
+        else:
+            return None
+        
+        # Look for a row that contains dates (typically has many date-like values)
+        date_row_idx = None
+        for idx in range(min(15, len(df_raw))):
+            row = df_raw.iloc[idx]
+            # Try to parse values as dates
+            date_count = 0
+            for val in row[1:]:  # Skip first column (usually row label)
+                try:
+                    pd.to_datetime(str(val))
+                    date_count += 1
+                except:
+                    pass
+            # If at least 50% of the row can be parsed as dates, this is likely the date row
+            if date_count >= len(row[1:]) * 0.5:
+                date_row_idx = idx
+                logger.info(f"Found date row at index {idx}")
+                break
+        
+        if date_row_idx is None:
+            return None
+        
+        # Look for Tips row
+        tips_row_idx = None
+        for idx in range(len(df_raw)):
+            row_label = str(df_raw.iloc[idx, 0]).lower()
+            if 'tip' in row_label:
+                tips_row_idx = idx
+                logger.info(f"Found Tips row at index {idx}")
+                break
+        
+        if tips_row_idx is None:
+            return None
+        
+        # Extract dates and tips
+        dates = df_raw.iloc[date_row_idx, 1:].tolist()
+        tip_values = df_raw.iloc[tips_row_idx, 1:].tolist()
+        
+        # Create DataFrame
+        daily_tips_df = pd.DataFrame({
+            'Date': dates,
+            'Tip Amount': tip_values
+        })
+        
+        # Clean Tip Amount column
+        daily_tips_df['Tip Amount'] = (
+            daily_tips_df['Tip Amount']
+            .astype(str)
+            .str.replace('$', '', regex=False)
+            .str.replace(',', '', regex=False)
+            .str.replace('(', '-', regex=False)
+            .str.replace(')', '', regex=False)
+            .str.strip()
+        )
+        daily_tips_df['Tip Amount'] = pd.to_numeric(daily_tips_df['Tip Amount'], errors='coerce')
+        
+        # Convert dates
+        daily_tips_df['Date'] = pd.to_datetime(daily_tips_df['Date'], errors='coerce')
+        
+        # Remove rows with NaN dates or tips
+        daily_tips_df = daily_tips_df.dropna(subset=['Date', 'Tip Amount'])
+        
+        logger.info(f"Extracted {len(daily_tips_df)} daily tips from transposed sales report")
+        return daily_tips_df if len(daily_tips_df) > 0 else None
+        
+    except Exception as e:
+        logger.debug(f"Not a transposed sales report: {e}")
+        return None
+
+
 def _normalize_df(df: pd.DataFrame, date_col: str, tips_col: str, hours_col: str, name_col: str) -> pd.DataFrame:
     required_cols = [date_col, tips_col, hours_col, name_col]
     if not all(col in df.columns for col in required_cols):

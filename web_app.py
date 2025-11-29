@@ -2,7 +2,7 @@ from flask import Flask, request, render_template, send_file, flash, jsonify
 import io
 import os
 import logging
-from calculator.tips import distribute_daily_tips_df, read_file_to_df
+from calculator.tips import distribute_daily_tips_df, read_file_to_df, _extract_from_transposed_sales_report
 from calculator.clock import process_clock_csv
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,13 @@ def index():
             # Load tips/sales files if any
             dfs = []
             for filename, file_bytes in tips_files:
-                df = read_file_to_df(file_bytes, filename)
+                # Try transposed sales report format first
+                df = _extract_from_transposed_sales_report(file_bytes, filename)
+                
+                # If not a transposed report, try regular format
+                if df is None:
+                    df = read_file_to_df(file_bytes, filename)
+                
                 dfs.append(df)
                 logger.info(f"Tips file {filename} loaded successfully")
 
