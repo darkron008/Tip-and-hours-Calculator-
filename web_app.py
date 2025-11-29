@@ -87,23 +87,33 @@ def ready():
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        uploaded_files = request.files.getlist("file")
-        if not uploaded_files or all(f.filename == "" for f in uploaded_files):
-            flash("Please upload at least one tips/sales file.")
+        # Clock file is now required
+        clock_file = request.files.get("clock_file")
+        if not clock_file or clock_file.filename == "":
+            flash("Please upload a clock/timesheet file.")
             return render_template("index.html")
 
-        # Validate each uploaded file
+        if not _allowed_file(clock_file.filename):
+            flash("Unsupported clock file type. Please upload .xlsx, .xls, or .csv files.")
+            return render_template("index.html")
+
+        # Tips/sales file is optional
+        uploaded_files = request.files.getlist("file")
         valid_files = []
-        for f in uploaded_files:
-            if f and f.filename and _allowed_file(f.filename):
-                valid_files.append(f)
+        if uploaded_files and not all(f.filename == "" for f in uploaded_files):
+            for f in uploaded_files:
+                if f and f.filename and _allowed_file(f.filename):
+                    valid_files.append(f)
+        
+        if uploaded_files and not valid_files:
+            flash("Unsupported tips file type. Please upload .xlsx, .xls, or .csv files.")
+            return render_template("index.html")
 
         if not valid_files:
-            flash("Unsupported file type. Please upload .xlsx, .xls, or .csv files.")
+            flash("Please upload at least one tips/sales file or provide tip data.")
             return render_template("index.html")
 
         # Get column names from form (with defaults); support auto-detect
-        auto_detect = request.form.get("auto_detect", "on") == "on"
         advanced_mode = request.form.get("advanced_mode") == "on"
 
         # In advanced mode, use provided values; otherwise auto-detect (pass None)
@@ -112,44 +122,35 @@ def index():
             tips_col = request.form.get("tips_col", "").strip() or None
             hours_col = request.form.get("hours_col", "").strip() or None
             name_col = request.form.get("name_col", "").strip() or None
+            clock_employee_col = request.form.get("clock_employee_col", "").strip() or None
+            clock_date_col = request.form.get("clock_date_col", "").strip() or None
+            clock_hours_col = request.form.get("clock_hours_col", "").strip() or None
         else:
             # Auto-detect by passing None
             date_col = None
             tips_col = None
             hours_col = None
             name_col = None
-
-        # Check for optional clock data file
-        clock_file = request.files.get("clock_file")
-        clock_df = None
-        clock_employee_col = None
-        clock_date_col = None
-        clock_hours_col = None
-
-        if clock_file and clock_file.filename != "":
-            if _allowed_file(clock_file.filename):
-                try:
-                    clock_bytes = clock_file.read()
-                    clock_df = read_file_to_df(clock_bytes, clock_file.filename)
-                    # Get optional custom column names for clock data
-                    if advanced_mode:
-                        clock_employee_col = request.form.get("clock_employee_col", "").strip() or None
-                        clock_date_col = request.form.get("clock_date_col", "").strip() or None
-                        clock_hours_col = request.form.get("clock_hours_col", "").strip() or None
-                    logger.info("Clock file loaded successfully for integration with tip distribution")
-                except Exception as e:
-                    logger.warning(f"Could not load clock file: {e}. Proceeding without clock data.")
+            clock_employee_col = None
+            clock_date_col = None
+            clock_hours_col = None
 
         try:
             import pandas as pd
 
+            # Load required clock file
+            clock_bytes = clock_file.read()
+            clock_df = read_file_to_df(clock_bytes, clock_file.filename)
+            logger.info("Clock file loaded successfully")
+
+            # Load optional tips/sales files
             dfs = []
             for f in valid_files:
                 file_bytes = f.read()
                 df = read_file_to_df(file_bytes, f.filename)
                 dfs.append(df)
 
-            # Pass list of DataFrames to processor with optional clock data
+            # Pass list of DataFrames to processor with clock data as primary
             final_dict, export_df = distribute_daily_tips_df(
                 dfs,
                 date_col,

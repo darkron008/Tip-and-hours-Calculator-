@@ -16,7 +16,15 @@ def test_flask_upload_two_files_returns_excel(tmp_path):
 
     client = app.test_client()
 
-    # Prepare two small Excel files in memory
+    # Prepare clock file (required)
+    clock_df = pd.DataFrame([
+        {"Employee": "Ivy", "Date": "2025-11-10", "Hours": 3.0},
+        {"Employee": "Jack", "Date": "2025-11-10", "Hours": 3.0},
+        {"Employee": "Ivy", "Date": "2025-11-11", "Hours": 2.0},
+        {"Employee": "Kate", "Date": "2025-11-11", "Hours": 6.0},
+    ])
+
+    # Prepare two small Excel files for tips (optional)
     df1 = pd.DataFrame([
         {"Shift Date": "2025-11-10", "Daily Tip Total": 90.0, "Hours Worked": 3.0, "Employee Name": "Ivy"},
         {"Shift Date": "2025-11-10", "Daily Tip Total": 0.0, "Hours Worked": 3.0, "Employee Name": "Jack"},
@@ -26,11 +34,13 @@ def test_flask_upload_two_files_returns_excel(tmp_path):
         {"Shift Date": "2025-11-11", "Daily Tip Total": 0.0, "Hours Worked": 6.0, "Employee Name": "Kate"},
     ])
 
+    b_clock = make_excel_bytes(clock_df)
     b1 = make_excel_bytes(df1)
     b2 = make_excel_bytes(df2)
 
     data = {
         "auto_detect": "on",
+        "clock_file": (io.BytesIO(b_clock), "clock.xlsx"),
         "file": [
             (io.BytesIO(b1), "input1.xlsx"),
             (io.BytesIO(b2), "input2.xlsx"),
