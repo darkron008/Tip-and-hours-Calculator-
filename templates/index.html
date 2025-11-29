@@ -83,7 +83,7 @@
     <div class="container">
       <div class="card">
         <h1>💸 Tip & Hours Calculator</h1>
-        <p>Drag and drop your Clover Excel report (14-day) to calculate and download the tip distribution summary.</p>
+        <p>Drag and drop your Excel or CSV file to calculate and download the tip distribution summary.</p>
 
         {% with messages = get_flashed_messages() %}
           {% if messages %}
@@ -97,10 +97,10 @@
           <!-- Drop Zone -->
           <div class="drop-zone" id="dropZone">
             <div class="drop-icon">📁</div>
-            <div class="drop-text">Drag and drop your Excel file here</div>
+            <div class="drop-text">Drag and drop your Excel or CSV file here</div>
             <div class="drop-hint">or click to browse</div>
             <div class="file-name" id="fileName"></div>
-            <input type="file" id="fileInput" name="file" accept=".xlsx,.xls" multiple />
+            <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv" multiple />
           </div>
 
           <!-- Column detection is automatic; no manual inputs required -->

@@ -1,7 +1,7 @@
 from flask import Flask, request, render_template, send_file, flash, jsonify
 import io
 import os
-from calculator.tips import distribute_daily_tips_df
+from calculator.tips import distribute_daily_tips_df, read_file_to_df
 
 try:
     import sentry_sdk
@@ -47,7 +47,7 @@ def require_basic_auth():
             )
 
 
-ALLOWED_EXTENSIONS = {"xlsx", "xls"}
+ALLOWED_EXTENSIONS = {"xlsx", "xls", "csv"}
 
 
 def _allowed_file(filename: str) -> bool:
@@ -95,7 +95,7 @@ def index():
                 valid_files.append(f)
 
         if not valid_files:
-            flash("Unsupported file type. Please upload .xlsx or .xls files.")
+            flash("Unsupported file type. Please upload .xlsx, .xls, or .csv files.")
             return render_template("index.html")
 
         # Get column names from form (with defaults); support auto-detect
@@ -121,8 +121,7 @@ def index():
             dfs = []
             for f in valid_files:
                 file_bytes = f.read()
-                input_io = io.BytesIO(file_bytes)
-                df = pd.read_excel(input_io)
+                df = read_file_to_df(file_bytes, f.filename)
                 dfs.append(df)
 
             # Pass list of DataFrames to processor (supports concatenation)

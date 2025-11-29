@@ -1,9 +1,33 @@
 from typing import Dict, Optional, List, Union, Tuple
 import logging
+import io
 import difflib
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+def read_file_to_df(file_bytes: bytes, filename: str) -> pd.DataFrame:
+    """Read Excel or CSV file from bytes and return DataFrame.
+    
+    Args:
+        file_bytes: Raw file content
+        filename: Original filename (used to infer format)
+    
+    Returns:
+        pd.DataFrame
+    
+    Raises:
+        ValueError: If file format is not supported
+    """
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    
+    if ext in ("xlsx", "xls"):
+        return pd.read_excel(io.BytesIO(file_bytes))
+    elif ext == "csv":
+        return pd.read_csv(io.BytesIO(file_bytes))
+    else:
+        raise ValueError(f"Unsupported file format: {ext}. Supported: xlsx, xls, csv")
 
 
 def _normalize_df(df: pd.DataFrame, date_col: str, tips_col: str, hours_col: str, name_col: str) -> pd.DataFrame:
