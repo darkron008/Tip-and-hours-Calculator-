@@ -119,6 +119,7 @@
         <div class="tab-buttons">
           <button type="button" class="tab-button active" data-tab="tips">💰 Tip Distribution</button>
           <button type="button" class="tab-button" data-tab="clock">⏱️ Clock Processing</button>
+          <button type="button" class="tab-button" data-tab="sales">📊 Sales Processing</button>
         </div>
 
         {% with messages = get_flashed_messages() %}
@@ -205,6 +206,42 @@
 
             <div class="controls">
               <button type="submit" id="submitBtn_clock">Process and Download Hours Summary</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Sales Processing Tab -->
+        <div id="sales" class="tab-content">
+          <p>Upload a sales report CSV to extract daily tip amounts.</p>
+
+          <form id="form_sales" method="post" action="/process-sales" enctype="multipart/form-data">
+            <!-- Drop Zone for Sales -->
+            <div class="drop-zone" id="dropZone_sales">
+              <div class="drop-icon">📊</div>
+              <div class="drop-text">Drag and drop your sales report file here</div>
+              <div class="drop-hint">or click to browse</div>
+              <div class="file-name" id="fileName_sales"></div>
+              <input type="file" id="fileInput_sales" name="sales_file" accept=".xlsx,.xls,.csv" />
+            </div>
+
+            <label style="margin-top:1rem; font-weight:600;">
+              <input type="checkbox" id="sales_advanced_mode" name="sales_advanced_mode" /> Advanced: Custom parameters
+            </label>
+
+            <!-- Advanced sales inputs (hidden by default) -->
+            <div id="sales_advanced_inputs" style="display:none; background:#f5f5f5; padding:1rem; border-radius:6px; margin-top:1rem;">
+              <label for="sales_col_label">Sales Column Label</label>
+              <input type="text" id="sales_col_label" name="sales_col_label" value="Sales" placeholder="e.g., Sales" />
+
+              <label for="sales_tips_row_label">Tips Row Label</label>
+              <input type="text" id="sales_tips_row_label" name="sales_tips_row_label" value="Tips" placeholder="e.g., Tips" />
+
+              <label for="sales_data_start_col">Data Start Column Index</label>
+              <input type="text" id="sales_data_start_col" name="sales_data_start_col" value="2" placeholder="e.g., 2 (0-indexed)" />
+            </div>
+
+            <div class="controls">
+              <button type="submit" id="submitBtn_sales">Process and Download Tips Summary</button>
             </div>
           </form>
         </div>
@@ -343,6 +380,65 @@
         } else {
           submitBtn_clock.disabled = true;
           submitBtn_clock.textContent = 'Processing...';
+        }
+      });
+
+      // Sales Processing Tab
+      const dropZone_sales = document.getElementById('dropZone_sales');
+      const fileInput_sales = document.getElementById('fileInput_sales');
+      const fileName_sales = document.getElementById('fileName_sales');
+      const form_sales = document.getElementById('form_sales');
+      const submitBtn_sales = document.getElementById('submitBtn_sales');
+      const advancedMode_sales = document.getElementById('sales_advanced_mode');
+      const advancedInputs_sales = document.getElementById('sales_advanced_inputs');
+
+      // Toggle advanced sales inputs
+      advancedMode_sales.addEventListener('change', () => {
+        advancedInputs_sales.style.display = advancedMode_sales.checked ? 'block' : 'none';
+      });
+
+      // Sales file picker
+      dropZone_sales.addEventListener('click', () => fileInput_sales.click());
+
+      fileInput_sales.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          fileName_sales.textContent = '✓ ' + e.target.files[0].name;
+          dropZone_sales.classList.add('active');
+        }
+      });
+
+      // Drag over
+      dropZone_sales.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone_sales.classList.add('dragover');
+      });
+
+      // Drag leave
+      dropZone_sales.addEventListener('dragleave', () => {
+        dropZone_sales.classList.remove('dragover');
+      });
+
+      // Drop
+      dropZone_sales.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone_sales.classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+          fileInput_sales.files = files;
+          fileName_sales.textContent = '✓ ' + files[0].name;
+          dropZone_sales.classList.add('active');
+        }
+      });
+
+      // Sales form submission
+      form_sales.addEventListener('submit', (e) => {
+        if (!fileInput_sales.files.length) {
+          e.preventDefault();
+          alert('Please select or drag a sales file.');
+        } else {
+          submitBtn_sales.disabled = true;
+          submitBtn_sales.textContent = 'Processing...';
         }
       });
     </script>
