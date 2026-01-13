@@ -47,13 +47,40 @@ def _generate_pdf_report(export_df, tips_df=None):
     if tips_df is not None and 'Date' in tips_df.columns:
         try:
             import pandas as pd
-            # Handle both datetime and string dates
-            dates = pd.to_datetime(tips_df['Date'], errors='coerce').dropna()
+            import re
+            
+            # Try to parse dates with proper format detection
+            dates = pd.to_datetime(tips_df['Date'], errors='coerce')
+            
+            # If most dates failed to parse, try with explicit format
+            if dates.isna().sum() > len(dates) * 0.5:
+                # Detect year from first non-null date value
+                detected_year = None
+                for val in tips_df['Date'].dropna().head(10):
+                    val_str = str(val).strip()
+                    year_match = re.search(r'\b(20[0-9]{2})\b', val_str)
+                    if year_match:
+                        detected_year = year_match.group(1)
+                        break
+                
+                if detected_year:
+                    year_suffix = detected_year[-2:]
+                    # Try parsing with detected year
+                    dates = pd.to_datetime(
+                        tips_df['Date'].apply(
+                            lambda x: f"{str(x).strip()}-{year_suffix}" 
+                            if pd.notna(x) and '-' not in str(x)[-3:] else str(x)
+                        ),
+                        format="%d-%b-%y",
+                        errors='coerce'
+                    )
+            
+            dates = dates.dropna()
             if len(dates) > 0:
                 min_date = dates.min().strftime('%B %d, %Y')
                 max_date = dates.max().strftime('%B %d, %Y')
                 date_range_text = f"Period: {min_date} to {max_date}<br/>Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
-        except Exception:
+        except Exception as e:
             pass  # Fallback to just generation date
     
     # Date/Period info
