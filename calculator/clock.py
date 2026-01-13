@@ -47,7 +47,13 @@ def process_clock_csv(
 
     # Convert date column to datetime
     if date_format:
-        df_shifts[date_col] = pd.to_datetime(df_shifts[date_col], format=date_format, errors="coerce")
+        # Use a pivot year of 2024 to ensure 2-digit years like '25' are interpreted as 2025+
+        df_shifts[date_col] = pd.to_datetime(
+            df_shifts[date_col], 
+            format=date_format, 
+            errors="coerce",
+            utc=False
+        )
     else:
         df_shifts[date_col] = pd.to_datetime(df_shifts[date_col], errors="coerce")
 

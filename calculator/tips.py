@@ -212,6 +212,55 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
         # Convert dates - try multiple formats since the file might have dates like "28-Jun" without year
         logger.debug(f"Sample dates before conversion: {daily_tips_df['Date'].head(3).tolist()}")
         
+        # Detect year from the entire raw dataframe (including headers)
+        import re
+        from datetime import datetime
+        
+        detected_year = None
+        
+        # First, search entire raw dataframe for 4-digit year (2000-2099)
+        for row in df_raw.values:
+            for cell in row:
+                cell_str = str(cell).strip()
+                if len(cell_str) < 4:
+                    continue
+                year_match = re.search(r'\b(20[0-9]{2})\b', cell_str)
+                if year_match:
+                    detected_year = year_match.group(1)
+                    logger.info(f"Detected year {detected_year} from file: {cell_str}")
+                    break
+            if detected_year:
+                break
+        
+        # If still no year found, try to infer from short dates like "28-Jun-25"
+        if not detected_year:
+            for sample_date in daily_tips_df['Date'].dropna().head(10):
+                sample_str = str(sample_date).strip()
+                # Look for 2-digit year at the end (e.g., "28-Jun-25" -> "25")
+                two_digit_year = re.search(r'-(\d{2})\s*$', sample_str)
+                if two_digit_year:
+                    two_digit = two_digit_year.group(1)
+                    # Convert 2-digit to 4-digit year assuming 00-99 range
+                    # Numbers 00-68 -> 2000-2068, 69-99 -> 1969-1999
+                    year_int = int(two_digit)
+                    if year_int <= 68:
+                        detected_year = f"20{two_digit}"
+                    else:
+                        detected_year = f"19{two_digit}"
+                    logger.info(f"Inferred year {detected_year} from 2-digit year: {sample_str}")
+                    break
+        
+        # If still no year found, use current year
+        if not detected_year:
+            detected_year = str(datetime.now().year)
+            logger.info(f"No year found in file, using current year: {detected_year}")
+        
+        # Convert 2-digit year to 4-digit if needed
+        if len(detected_year) == 2:
+            detected_year = f"20{detected_year}"
+        
+        year_suffix = detected_year[-2:]  # Get last 2 digits for the format string
+        
         # First try parsing with explicit format handling
         def parse_date(date_str):
             if pd.isna(date_str) or str(date_str).strip() == '':
@@ -221,9 +270,8 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
                 return pd.to_datetime(date_str)
             except:
                 try:
-                    # If that fails, try common formats like "28-Jun" (add current/report year)
-                    # For this file, dates are from Jun-Jul 2025
-                    return pd.to_datetime(f"{date_str}-25", format="%d-%b-%y")
+                    # If that fails, try common formats like "28-Jun" with detected year
+                    return pd.to_datetime(f"{date_str}-{year_suffix}", format="%d-%b-%y")
                 except:
                     return pd.NaT
         
@@ -316,7 +364,7 @@ def _detect_columns(df: pd.DataFrame) -> Tuple[str, str, str, str]:
     # If still missing, try fuzzy matching against column names
     if missing:
         lowered_values = list(lowered.values())
-        for key, kw_list in ("date_col", date_kw), ("tips_col", tips_kw), ("hours_col", hours_kw), ("name_col", name_kw):
+        for key, kw_list in [("date_col", date_kw), ("tips_col", tips_kw), ("hours_col", hours_kw), ("name_col", name_kw)]:
             # only try for ones that are still missing
             if locals().get(key) is not None:
                 continue
