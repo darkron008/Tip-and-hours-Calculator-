@@ -271,11 +271,29 @@ def _extract_from_transposed_sales_report(file_bytes: bytes, filename: str) -> O
             except:
                 try:
                     # If that fails, try common formats like "28-Jun" with detected year
-                    return pd.to_datetime(f"{date_str}-{year_suffix}", format="%d-%b-%y")
+                    parsed = pd.to_datetime(f"{date_str}-{year_suffix}", format="%d-%b-%y")
+                    return parsed
                 except:
                     return pd.NaT
         
         daily_tips_df['Date'] = daily_tips_df['Date'].apply(parse_date)
+        
+        # Handle year boundary crossings (e.g., Dec 2025 to Jan 2026)
+        # If we have dates and some are in January but most are in Dec/later months,
+        # the January dates likely need to be incremented to next year
+        if len(daily_tips_df) > 0 and 'Date' in daily_tips_df.columns:
+            valid_dates = daily_tips_df['Date'].dropna()
+            if len(valid_dates) > 1:
+                # Check if we have a month jump (e.g., Dec to Jan)
+                months = valid_dates.dt.month.values
+                # If we see a transition from high month (11,12) to low month (1,2,3)
+                for i in range(len(months) - 1):
+                    if months[i] >= 11 and months[i+1] <= 3:  # Dec/Nov to Jan/Feb/Mar transition
+                        # Increment year for all dates that are in month <= 3
+                        mask = daily_tips_df['Date'].dt.month <= 3
+                        daily_tips_df.loc[mask, 'Date'] = daily_tips_df.loc[mask, 'Date'] + pd.DateOffset(years=1)
+                        logger.info(f"Detected year boundary, incremented {mask.sum()} January-March dates by 1 year")
+                        break
         
         logger.debug(f"After date conversion, {daily_tips_df['Date'].notna().sum()} valid dates")
         logger.debug(f"Sample dates after conversion: {daily_tips_df['Date'].head(3).tolist()}")
